@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Terem foglaltság</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --paper: #ffffff;
+  --ink: #1e2a2f;
+  --ink-soft: #5b6870;
+  --line: #e3e6e8;
+  --line-hour: #cdd3d6;
+  --free: #f6f8f8;
+  --booked: #1f6f5c;
+  --booked-ink: #ffffff;
+  --private: #d9dee1;
+  --private-ink: #3d4a51;
+  --now: #e4572e;
+  --row: 26px;
+  --timecol: 52px;
+  --head: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  --body: 'Barlow', system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--paper); color: var(--ink);
+  font-family: var(--body); font-size: 15px; line-height: 1.4;
+  display: flex; flex-direction: column;
+}
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--now); outline-offset: 2px; }
+
+.bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 16px; border-bottom: 1px solid var(--line);
+}
+.bar h1 {
+  font-family: var(--head); font-weight: 600; font-size: 22px; letter-spacing: .01em;
+  margin: 0 auto 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.nav {
+  width: 36px; height: 36px; border-radius: 6px; border: 1px solid var(--line-hour);
+  background: var(--paper); cursor: pointer; display: grid; place-items: center; flex: none;
+}
+.nav:hover { background: var(--free); }
+.today {
+  height: 36px; padding: 0 14px; border-radius: 6px; border: 1px solid var(--line-hour);
+  background: var(--paper); cursor: pointer; font-weight: 500;
+}
+.today:hover { background: var(--free); }
+.datepick {
+  height: 36px; border: 1px solid var(--line-hour); border-radius: 6px; padding: 0 8px;
+  font: inherit; color: var(--ink); background: var(--paper);
+}
+
+.rooms { display: none; gap: 6px; padding: 10px 16px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+.rooms button {
+  flex: none; height: 34px; min-width: 44px; padding: 0 12px; border-radius: 17px;
+  border: 1px solid var(--line-hour); background: var(--paper); cursor: pointer;
+  font-family: var(--head); font-weight: 600; font-size: 16px;
+}
+.rooms button[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+.status { padding: 8px 16px; font-size: 14px; color: var(--ink-soft); min-height: 0; }
+.status:empty { display: none; }
+.status.err { color: #a3321a; }
+
+.scroller { flex: 1; overflow: auto; position: relative; }
+.grid {
+  display: grid; position: relative;
+  grid-template-columns: var(--timecol) repeat(var(--cols), minmax(0, 1fr));
+}
+.colhead {
+  position: sticky; top: 0; z-index: 3; background: var(--paper);
+  border-bottom: 1px solid var(--line-hour);
+  font-family: var(--head); font-weight: 600; font-size: 17px;
+  text-align: center; padding: 8px 2px;
+}
+.corner { position: sticky; left: 0; z-index: 4; }
+.times { position: relative; }
+.times div {
+  height: var(--row); font-family: var(--head); font-weight: 500; font-size: 13px;
+  color: var(--ink-soft); text-align: right; padding-right: 8px; transform: translateY(-8px);
+}
+.times div.half { visibility: hidden; }
+.col {
+  position: relative; border-left: 1px solid var(--line);
+  background-image: repeating-linear-gradient(to bottom,
+    var(--line-hour) 0 1px, transparent 1px var(--row),
+    var(--line) var(--row) calc(var(--row) + 1px), transparent calc(var(--row) + 1px) calc(var(--row) * 2));
+}
+.b {
+  position: absolute; left: 3px; right: 3px; border-radius: 5px;
+  padding: 3px 6px; overflow: hidden; font-size: 13px; line-height: 1.25;
+  text-decoration: none; display: block;
+}
+.b strong { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.b span { font-family: var(--head); font-weight: 500; opacity: .85; }
+.b.pub { background: var(--booked); color: var(--booked-ink); }
+a.b.pub:hover { filter: brightness(1.12); }
+.b.priv {
+  color: var(--private-ink);
+  background: repeating-linear-gradient(135deg, var(--private) 0 6px, #e6eaec 6px 12px);
+}
+.b.short strong { display: inline; }
+.b.short span { display: none; }
+
+.nowline { position: absolute; left: var(--timecol); right: 0; height: 2px; background: var(--now); z-index: 2; pointer-events: none; }
+.nowline::before {
+  content: ''; position: absolute; left: -5px; top: -4px; width: 10px; height: 10px;
+  border-radius: 50%; background: var(--now);
+}
+
+.legend {
+  display: flex; flex-wrap: wrap; gap: 6px 18px; padding: 10px 16px;
+  border-top: 1px solid var(--line); font-size: 13px; color: var(--ink-soft);
+}
+.legend i { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: -2px; margin-right: 6px; }
+.legend .l-free { background: var(--free); border: 1px solid var(--line-hour); }
+.legend .l-pub { background: var(--booked); }
+.legend .l-priv { background: repeating-linear-gradient(135deg, var(--private) 0 4px, #e6eaec 4px 8px); }
+.legend .l-now { background: var(--now); height: 3px; width: 14px; vertical-align: 3px; border-radius: 0; }
+
+@media (max-width: 640px) {
+  .rooms { display: flex; }
+  .bar h1 { font-size: 19px; }
+  .datepick { display: none; }
+  .b { font-size: 14px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .scroller { scroll-behavior: smooth; }
+}
+</style>
+</head>
+<body>
+<header class="bar">
+  <button class="nav" id="prev" aria-label="Előző nap"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></button>
+  <button class="nav" id="next" aria-label="Következő nap"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></button>
+  <h1 id="title" aria-live="polite"></h1>
+  <input type="date" class="datepick" id="pick" aria-label="Dátum választása">
+  <button class="today" id="today">Ma</button>
+</header>
+<nav class="rooms" id="rooms" aria-label="Terem választása"></nav>
+<div class="status" id="status" role="status"></div>
+<main class="scroller" id="scroller">
+  <div class="grid" id="grid"></div>
+</main>
+<footer class="legend">
+  <span><i class="l-free"></i>Szabad</span>
+  <span><i class="l-pub"></i>Foglalt – kattints a bérlő oldaláért</span>
+  <span><i class="l-priv"></i>Foglalt</span>
+  <span><i class="l-now"></i>Most</span>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SUPABASE_URL = 'https://bzcqamsnziqnbroihjot.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_eaVUut5YEnXdcRz3E4ImRA_vO9TKKjx';
+const TZ = 'Europe/Budapest';
+const DEMO = new URLSearchParams(location.search).has('demo');
+
+const db = DEMO ? null : window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } });
+
+const $ = id => document.getElementById(id);
+const partsFmt = new Intl.DateTimeFormat('en-US', { timeZone: TZ, hourCycle: 'h23',
+  year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const hmFmt = new Intl.DateTimeFormat('hu-HU', { timeZone: TZ, hour: '2-digit', minute: '2-digit' });
+const titleFmt = new Intl.DateTimeFormat('hu-HU', { timeZone: TZ, month: 'long', day: 'numeric', weekday: 'long' });
+
+function bpParts(date) {
+  const p = Object.fromEntries(partsFmt.formatToParts(date).map(x => [x.type, x.value]));
+  return { y: +p.year, m: +p.month - 1, d: +p.day, h: +p.hour, min: +p.minute, s: +p.second };
+}
+function offsetMs(date) {
+  const p = bpParts(date);
+  return Date.UTC(p.y, p.m, p.d, p.h, p.min, p.s) - Math.floor(date.getTime() / 1000) * 1000;
+}
+function bpMidnight(y, m, d) {
+  const guess = Date.UTC(y, m, d);
+  let t = guess - offsetMs(new Date(guess));
+  t = guess - offsetMs(new Date(t));
+  return new Date(t);
+}
+function addDays(day, n) {
+  const u = new Date(Date.UTC(day.y, day.m, day.d + n));
+  return { y: u.getUTCFullYear(), m: u.getUTCMonth(), d: u.getUTCDate() };
+}
+const iso = day => `${day.y}-${String(day.m + 1).padStart(2, '0')}-${String(day.d).padStart(2, '0')}`;
+const todayBp = () => { const p = bpParts(new Date()); return { y: p.y, m: p.m, d: p.d }; };
+
+let rooms = [];
+let day = todayBp();
+let selectedRoom = null;
+let firstRender = true;
+const mobile = window.matchMedia('(max-width: 640px)');
+
+function rowPx() { return parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--row')); }
+
+function demoData(start) {
+  const at = (h, m) => new Date(start.getTime() + (h * 60 + m) * 60000).toISOString();
+  return {
+    rooms: [1,2,3,4,5,6,7].map(i => ({ id: i, nev: 'Terem ' + i, sorrend: i })),
+    bookings: [
+      { terem_id: 1, kezdes: at(7, 0), veg: at(8, 30), nev: 'Foglalt', link: null },
+      { terem_id: 1, kezdes: at(17, 0), veg: at(19, 0), nev: 'Jóga Stúdió', link: 'https://example.com' },
+      { terem_id: 2, kezdes: at(16, 0), veg: at(17, 0), nev: 'Foglalt', link: null },
+      { terem_id: 3, kezdes: at(18, 0), veg: at(19, 30), nev: 'TRX Edzés Debrecen', link: 'https://example.com' },
+      { terem_id: 4, kezdes: at(9, 30), veg: at(11, 0), nev: 'Pilates Kft.', link: 'https://example.com' },
+      { terem_id: 4, kezdes: at(18, 0), veg: at(20, 0), nev: 'Pilates Kft.', link: 'https://example.com' },
+      { terem_id: 5, kezdes: at(19, 0), veg: at(19, 30), nev: 'Foglalt', link: null },
+      { terem_id: 6, kezdes: at(17, 30), veg: at(21, 0), nev: 'Box Klub', link: 'https://example.com' },
+      { terem_id: 7, kezdes: at(6, 0), veg: at(7, 0), nev: 'Futókör', link: null },
+    ]
+  };
+}
+
+async function loadRooms() {
+  if (DEMO) { rooms = demoData(new Date()).rooms; return; }
+  const { data, error } = await db.from('termek').select('id, nev, sorrend').order('sorrend');
+  if (error) throw error;
+  rooms = data;
+}
+
+async function loadBookings(start, end) {
+  if (DEMO) return demoData(start).bookings;
+  const { data, error } = await db.rpc('naptar', { tol: start.toISOString(), ig: end.toISOString() });
+  if (error) throw error;
+  return data;
+}
+
+function renderRoomChips() {
+  const nav = $('rooms');
+  nav.innerHTML = '';
+  rooms.forEach(r => {
+    const b = document.createElement('button');
+    b.textContent = r.nev.replace(/^Terem\s*/i, '') || r.nev;
+    b.setAttribute('aria-label', r.nev);
+    b.setAttribute('aria-pressed', String(r.id === selectedRoom));
+    b.onclick = () => { selectedRoom = r.id; renderRoomChips(); refresh(); };
+    nav.appendChild(b);
+  });
+}
+
+function build(bookings, start, end) {
+  const grid = $('grid');
+  const visible = mobile.matches ? rooms.filter(r => r.id === selectedRoom) : rooms;
+  grid.style.setProperty('--cols', visible.length);
+  grid.innerHTML = '';
+  const row = rowPx();
+  const dayMin = (end - start) / 60000;
+  const slots = Math.round(dayMin / 30);
+
+  const corner = document.createElement('div');
+  corner.className = 'colhead corner';
+  grid.appendChild(corner);
+  visible.forEach(r => {
+    const h = document.createElement('div');
+    h.className = 'colhead';
+    h.textContent = r.nev;
+    grid.appendChild(h);
+  });
+
+  const times = document.createElement('div');
+  times.className = 'times';
+  for (let i = 0; i < slots; i++) {
+    const t = document.createElement('div');
+    const at = new Date(start.getTime() + i * 30 * 60000);
+    t.textContent = i === 0 ? '' : hmFmt.format(at);
+    if (bpParts(at).min !== 0) t.className = 'half';
+    times.appendChild(t);
+  }
+  grid.appendChild(times);
+
+  visible.forEach(r => {
+    const col = document.createElement('div');
+    col.className = 'col';
+    col.style.height = (slots * row) + 'px';
+    col.setAttribute('role', 'list');
+    col.setAttribute('aria-label', r.nev + ' foglalásai');
+    bookings.filter(b => b.terem_id === r.id).forEach(b => {
+      const s = Math.max(0, (new Date(b.kezdes) - start) / 60000);
+      const e = Math.min(dayMin, (new Date(b.veg) - start) / 60000);
+      if (e <= s) return;
+      const el = document.createElement(b.link ? 'a' : 'div');
+      el.className = 'b ' + (b.link || b.nev !== 'Foglalt' ? 'pub' : 'priv');
+      if ((e - s) <= 30) el.classList.add('short');
+      el.style.top = (s / 30 * row + 1) + 'px';
+      el.style.height = ((e - s) / 30 * row - 2) + 'px';
+      el.setAttribute('role', 'listitem');
+      const range = hmFmt.format(new Date(b.kezdes)) + '–' + hmFmt.format(new Date(b.veg));
+      el.innerHTML = '<strong></strong><span></span>';
+      el.querySelector('strong').textContent = b.nev;
+      el.querySelector('span').textContent = range;
+      el.title = b.nev + ', ' + range;
+      if (b.link) { el.href = b.link; el.target = '_blank'; el.rel = 'noopener'; }
+      col.appendChild(el);
+    });
+    grid.appendChild(col);
+  });
+
+  const now = new Date();
+  if (now >= start && now < end) {
+    const line = document.createElement('div');
+    line.className = 'nowline';
+    const headH = grid.querySelector('.colhead').offsetHeight;
+    line.style.top = (headH + (now - start) / 60000 / 30 * row - 1) + 'px';
+    grid.appendChild(line);
+  }
+  return { row, headH: grid.querySelector('.colhead').offsetHeight };
+}
+
+async function refresh() {
+  const start = bpMidnight(day.y, day.m, day.d);
+  const nd = addDays(day, 1);
+  const end = bpMidnight(nd.y, nd.m, nd.d);
+  $('title').textContent = titleFmt.format(new Date(start.getTime() + 12 * 3600000));
+  $('pick').value = iso(day);
+  try {
+    const bookings = await loadBookings(start, end);
+    $('status').textContent = '';
+    $('status').className = 'status';
+    const { row } = build(bookings, start, end);
+    if (firstRender) {
+      firstRender = false;
+      const now = new Date();
+      const target = (now >= start && now < end) ? (now - start) / 60000 - 60 : 7 * 60;
+      $('scroller').style.scrollBehavior = 'auto';
+      $('scroller').scrollTop = Math.max(0, target / 30 * row);
+      $('scroller').style.scrollBehavior = '';
+    }
+  } catch (err) {
+    console.error(err);
+    $('status').className = 'status err';
+    $('status').textContent = 'Nem sikerült betölteni a naptárt. Ellenőrizd az internetkapcsolatot, és frissítsd az oldalt.';
+  }
+}
+
+function go(n) { day = addDays(day, n); refresh(); }
+$('prev').onclick = () => go(-1);
+$('next').onclick = () => go(1);
+$('today').onclick = () => { day = todayBp(); firstRender = true; refresh(); };
+$('pick').onchange = e => {
+  const [y, m, d] = e.target.value.split('-').map(Number);
+  if (y) { day = { y, m: m - 1, d }; refresh(); }
+};
+mobile.addEventListener('change', () => refresh());
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+setInterval(() => { if (!document.hidden) refresh(); }, 60000);
+
+(async () => {
+  try {
+    await loadRooms();
+    selectedRoom = rooms[0] && rooms[0].id;
+    renderRoomChips();
+    refresh();
+  } catch (err) {
+    console.error(err);
+    $('status').className = 'status err';
+    $('status').textContent = 'Nem sikerült betölteni a termeket. Frissítsd az oldalt.';
+  }
+})();
+</script>
+</body>
+</html>
