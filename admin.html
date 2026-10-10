@@ -131,6 +131,7 @@ textarea.in { height: 64px; padding: 8px 10px; resize: vertical; }
 }
 .b:hover { filter: brightness(1.08); }
 .b.short span { display: none; }
+.b.tiny { padding: 0 6px; font-size: 11px; line-height: 1; }
 .nowline { position: absolute; left: var(--timecol); right: 0; height: 2px; background: var(--now); z-index: 1; pointer-events: none; }
 
 /* Tenants */
@@ -315,7 +316,7 @@ function friendlyError(err) {
   const msg = (err && (err.message || err.error_description)) || String(err);
   if (err && err.code === '23P01') return 'Ütközik egy meglévő foglalással ugyanebben a teremben.';
   if (/foglalas_veg_kezdes_utan/.test(msg)) return 'A foglalás vége a kezdés után kell legyen.';
-  if (/felora/.test(msg)) return 'Csak egész vagy fél órára lehet foglalni.';
+  if (/felora|negyedora/.test(msg)) return 'Csak negyedórára (:00, :15, :30, :45) lehet foglalni.';
   if (/Invalid login credentials/i.test(msg)) return 'Hibás e-mail cím vagy jelszó.';
   if (/Failed to fetch|NetworkError/i.test(msg)) return 'Nincs kapcsolat a szerverrel. Ellenőrizd az internetet.';
   if (/^Ütközés:/.test(msg)) return msg + '. Semmi nem lett elmentve, válassz másik időpontot vagy rövidebb időszakot.';
@@ -529,6 +530,7 @@ function build(start, end) {
       el.type = 'button';
       el.className = 'b ' + (t && t.nyilvanos ? 'pub' : 'priv') + (b.sorozat_id ? ' series' : '');
       if (e - s <= 30) el.classList.add('short');
+      if (e - s < 30) el.classList.add('tiny');
       el.style.top = (s / 30 * row + 1) + 'px';
       el.style.height = ((e - s) / 30 * row - 2) + 'px';
       const range = hmFmt.format(new Date(b.kezdes)) + '–' + hmFmt.format(new Date(b.veg));
@@ -564,9 +566,9 @@ $('pick').onchange = e => { if (e.target.value) { day = parseIso(e.target.value)
 /* ---------- Static selects ---------- */
 function fillStatic() {
   $('bRoom').innerHTML = rooms.map(r => `<option value="${r.id}">${r.nev}</option>`).join('');
-  let s = ''; for (let m = 0; m < 1440; m += 30) s += `<option value="${m}">${hm(m)}</option>`;
+  let s = ''; for (let m = 0; m < 1440; m += 15) s += `<option value="${m}">${hm(m)}</option>`;
   $('bStart').innerHTML = s;
-  let d = ''; for (let m = 30; m <= 720; m += 30) d += `<option value="${m}">${durLabel(m)}</option>`;
+  let d = ''; for (let m = 15; m <= 720; m += 15) d += `<option value="${m}">${durLabel(m)}</option>`;
   $('bDur').innerHTML = d;
   fillTenantSelect();
 }

@@ -64,6 +64,7 @@ button { font: inherit; color: inherit; }
   border: 1px solid var(--line-hour); background: var(--paper); cursor: pointer;
   font-family: var(--head); font-weight: 600; font-size: 16px;
 }
+.rooms .gap { flex: none; width: 1px; background: var(--line-hour); margin: 4px 4px; }
 .rooms button[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
 
 .status { padding: 8px 16px; font-size: 14px; color: var(--ink-soft); min-height: 0; }
@@ -75,13 +76,21 @@ button { font: inherit; color: inherit; }
   display: grid; position: relative;
   grid-template-columns: var(--timecol) repeat(var(--cols), minmax(0, 1fr));
 }
-.colhead {
+.grouphead {
   position: sticky; top: 0; z-index: 3; background: var(--paper);
+  height: var(--gh); line-height: var(--gh); text-align: center;
+  font-size: 13px; font-weight: 500; color: var(--ink-soft);
+  border-bottom: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.grouphead:not(.corner) + .grouphead { border-left: 2px solid var(--line-hour); }
+.colhead.loc-start, .col.loc-start { border-left: 2px solid var(--line-hour); }
+.colhead {
+  position: sticky; top: var(--gh, 0px); z-index: 3; background: var(--paper);
   border-bottom: 1px solid var(--line-hour);
   font-family: var(--head); font-weight: 600; font-size: 17px;
   text-align: center; padding: 8px 2px;
 }
-.corner { position: sticky; left: 0; z-index: 4; }
+.corner { left: 0; z-index: 4; }
 .times { position: relative; }
 .times div {
   height: var(--row); font-family: var(--head); font-weight: 500; font-size: 13px;
@@ -109,6 +118,7 @@ a.b.pub:hover { filter: brightness(1.12); }
 }
 .b.short strong { display: inline; }
 .b.short span { display: none; }
+.b.tiny { padding: 0 6px; font-size: 11px; line-height: 1; }
 
 .nowline { position: absolute; left: var(--timecol); right: 0; height: 2px; background: var(--now); z-index: 2; pointer-events: none; }
 .nowline::before {
@@ -204,7 +214,7 @@ function rowPx() { return parseFloat(getComputedStyle(document.documentElement).
 function demoData(start) {
   const at = (h, m) => new Date(start.getTime() + (h * 60 + m) * 60000).toISOString();
   return {
-    rooms: [1,2,3,4,5,6,7].map(i => ({ id: i, nev: 'Terem ' + i, sorrend: i })),
+    rooms: [1,2,3,4,5,7].map(i => ({ id: i, nev: 'Terem ' + i, sorrend: i, helyszin: i < 5 ? 'Mikepércsi út 10' : 'Déli sor 29' })),
     bookings: [
       { terem_id: 1, kezdes: at(7, 0), veg: at(8, 30), nev: 'Foglalt', link: null },
       { terem_id: 1, kezdes: at(17, 0), veg: at(19, 0), nev: 'Jóga Stúdió', link: 'https://example.com' },
@@ -221,7 +231,7 @@ function demoData(start) {
 
 async function loadRooms() {
   if (DEMO) { rooms = demoData(new Date()).rooms; return; }
-  const { data, error } = await db.from('termek').select('id, nev, sorrend').order('sorrend');
+  const { data, error } = await db.from('termek').select('*').order('sorrend');
   if (error) throw error;
   rooms = data;
 }
@@ -236,10 +246,14 @@ async function loadBookings(start, end) {
 function renderRoomChips() {
   const nav = $('rooms');
   nav.innerHTML = '';
-  rooms.forEach(r => {
+  rooms.forEach((r, i) => {
+    if (i > 0 && r.helyszin !== rooms[i - 1].helyszin) {
+      const g = document.createElement('span'); g.className = 'gap'; g.setAttribute('aria-hidden', 'true'); nav.appendChild(g);
+    }
     const b = document.createElement('button');
     b.textContent = r.nev.replace(/^Terem\s*/i, '') || r.nev;
-    b.setAttribute('aria-label', r.nev);
+    b.setAttribute('aria-label', r.nev + (r.helyszin ? ', ' + r.helyszin : ''));
+    if (r.helyszin) b.title = r.helyszin;
     b.setAttribute('aria-pressed', String(r.id === selectedRoom));
     b.onclick = () => { selectedRoom = r.id; renderRoomChips(); refresh(); };
     nav.appendChild(b);
@@ -255,12 +269,28 @@ function build(bookings, start, end) {
   const dayMin = (end - start) / 60000;
   const slots = Math.round(dayMin / 30);
 
+  const locStart = (r, i) => i > 0 && r.helyszin !== visible[i - 1].helyszin;
+  const hasLoc = visible.some(r => r.helyszin);
+  grid.style.setProperty('--gh', hasLoc ? '28px' : '0px');
+  if (hasLoc) {
+    const gc = document.createElement('div'); gc.className = 'grouphead corner'; grid.appendChild(gc);
+    let i = 0;
+    while (i < visible.length) {
+      let j = i; while (j + 1 < visible.length && visible[j + 1].helyszin === visible[i].helyszin) j++;
+      const g = document.createElement('div');
+      g.className = 'grouphead';
+      g.style.gridColumn = 'span ' + (j - i + 1);
+      g.textContent = visible[i].helyszin || '';
+      grid.appendChild(g);
+      i = j + 1;
+    }
+  }
   const corner = document.createElement('div');
   corner.className = 'colhead corner';
   grid.appendChild(corner);
-  visible.forEach(r => {
+  visible.forEach((r, i) => {
     const h = document.createElement('div');
-    h.className = 'colhead';
+    h.className = 'colhead' + (locStart(r, i) ? ' loc-start' : '');
     h.textContent = r.nev;
     grid.appendChild(h);
   });
@@ -276,12 +306,12 @@ function build(bookings, start, end) {
   }
   grid.appendChild(times);
 
-  visible.forEach(r => {
+  visible.forEach((r, i) => {
     const col = document.createElement('div');
-    col.className = 'col';
+    col.className = 'col' + (locStart(r, i) ? ' loc-start' : '');
     col.style.height = (slots * row) + 'px';
     col.setAttribute('role', 'list');
-    col.setAttribute('aria-label', r.nev + ' foglalásai');
+    col.setAttribute('aria-label', r.nev + (r.helyszin ? ', ' + r.helyszin : '') + ' foglalásai');
     bookings.filter(b => b.terem_id === r.id).forEach(b => {
       const s = Math.max(0, (new Date(b.kezdes) - start) / 60000);
       const e = Math.min(dayMin, (new Date(b.veg) - start) / 60000);
@@ -289,6 +319,7 @@ function build(bookings, start, end) {
       const el = document.createElement(b.link ? 'a' : 'div');
       el.className = 'b ' + (b.link || b.nev !== 'Foglalt' ? 'pub' : 'priv');
       if ((e - s) <= 30) el.classList.add('short');
+      if ((e - s) < 30) el.classList.add('tiny');
       el.style.top = (s / 30 * row + 1) + 'px';
       el.style.height = ((e - s) / 30 * row - 2) + 'px';
       el.setAttribute('role', 'listitem');
@@ -307,11 +338,11 @@ function build(bookings, start, end) {
   if (now >= start && now < end) {
     const line = document.createElement('div');
     line.className = 'nowline';
-    const headH = grid.querySelector('.colhead').offsetHeight;
+    const headH = grid.querySelector('.col').offsetTop;
     line.style.top = (headH + (now - start) / 60000 / 30 * row - 1) + 'px';
     grid.appendChild(line);
   }
-  return { row, headH: grid.querySelector('.colhead').offsetHeight };
+  return { row };
 }
 
 async function refresh() {
