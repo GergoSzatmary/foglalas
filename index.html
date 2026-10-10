@@ -105,9 +105,10 @@ button { font: inherit; color: inherit; }
 }
 .b {
   position: absolute; left: 3px; right: 3px; border-radius: 5px;
-  padding: 3px 6px; overflow: hidden; font-size: 13px; line-height: 1.25;
+  padding: 3px 6px; overflow: hidden; overflow: clip; font-size: 13px; line-height: 1.25;
   text-decoration: none; display: block;
 }
+.b .lbl { position: sticky; top: calc(var(--gh, 0px) + var(--hh, 38px) + 3px); }
 .b strong { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .b span { font-family: var(--head); font-weight: 500; opacity: .85; }
 .b.pub { background: var(--booked); color: var(--booked-ink); }
@@ -214,7 +215,7 @@ function rowPx() { return parseFloat(getComputedStyle(document.documentElement).
 function demoData(start) {
   const at = (h, m) => new Date(start.getTime() + (h * 60 + m) * 60000).toISOString();
   return {
-    rooms: [1,2,3,4,5,7].map(i => ({ id: i, nev: 'Terem ' + i, sorrend: i, helyszin: i < 5 ? 'Mikepércsi út 10' : 'Déli sor 29' })),
+    rooms: [1,2,3,4,5,6,7].map(i => ({ id: i, nev: 'Terem ' + i, sorrend: i, helyszin: i < 5 ? 'Mikepércsi út 10' : 'Déli sor 29' })),
     bookings: [
       { terem_id: 1, kezdes: at(7, 0), veg: at(8, 30), nev: 'Foglalt', link: null },
       { terem_id: 1, kezdes: at(17, 0), veg: at(19, 0), nev: 'Jóga Stúdió', link: 'https://example.com' },
@@ -223,7 +224,7 @@ function demoData(start) {
       { terem_id: 4, kezdes: at(9, 30), veg: at(11, 0), nev: 'Pilates Kft.', link: 'https://example.com' },
       { terem_id: 4, kezdes: at(18, 0), veg: at(20, 0), nev: 'Pilates Kft.', link: 'https://example.com' },
       { terem_id: 5, kezdes: at(19, 0), veg: at(19, 30), nev: 'Foglalt', link: null },
-      { terem_id: 6, kezdes: at(17, 30), veg: at(21, 0), nev: 'Box Klub', link: 'https://example.com' },
+      { terem_id: 6, kezdes: at(0, 0), veg: at(24, 0), nev: 'Engy-Geri', link: 'https://example.com' },
       { terem_id: 7, kezdes: at(6, 0), veg: at(7, 0), nev: 'Futókör', link: null },
     ]
   };
@@ -295,6 +296,7 @@ function build(bookings, start, end) {
     grid.appendChild(h);
   });
 
+  grid.style.setProperty('--hh', grid.querySelector('.colhead:not(.corner)').offsetHeight + 'px');
   const times = document.createElement('div');
   times.className = 'times';
   for (let i = 0; i < slots; i++) {
@@ -323,8 +325,8 @@ function build(bookings, start, end) {
       el.style.top = (s / 30 * row + 1) + 'px';
       el.style.height = ((e - s) / 30 * row - 2) + 'px';
       el.setAttribute('role', 'listitem');
-      const range = hmFmt.format(new Date(b.kezdes)) + '–' + hmFmt.format(new Date(b.veg));
-      el.innerHTML = '<strong></strong><span></span>';
+      const range = (s === 0 && e === dayMin) ? 'Egész nap' : hmFmt.format(new Date(b.kezdes)) + '–' + hmFmt.format(new Date(b.veg));
+      el.innerHTML = '<div class="lbl"><strong></strong><span></span></div>';
       el.querySelector('strong').textContent = b.nev;
       el.querySelector('span').textContent = range;
       el.title = b.nev + ', ' + range;
