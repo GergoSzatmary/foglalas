@@ -58,14 +58,31 @@ button { font: inherit; color: inherit; }
   font: inherit; color: var(--ink); background: var(--paper);
 }
 
-.rooms { display: none; gap: 6px; padding: 10px 16px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+.rooms { display: none; gap: 10px 20px; padding: 8px 16px 10px; border-bottom: 1px solid var(--line); flex-wrap: wrap; align-items: flex-end; }
+.rgroup { display: flex; flex-direction: column; gap: 4px; }
+.rlabel { font-size: 12px; font-weight: 500; color: var(--ink-soft); }
+.rchips { display: flex; gap: 6px; }
 .rooms button {
   flex: none; height: 34px; min-width: 44px; padding: 0 12px; border-radius: 17px;
   border: 1px solid var(--line-hour); background: var(--paper); cursor: pointer;
   font-family: var(--head); font-weight: 600; font-size: 16px;
 }
-.rooms .gap { flex: none; width: 1px; background: var(--line-hour); margin: 4px 4px; }
 .rooms button[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+.seg { display: inline-flex; border: 1px solid var(--line-hour); border-radius: 6px; padding: 2px; flex: none; }
+.seg button {
+  height: 30px; padding: 0 12px; border: 0; border-radius: 4px; background: none; cursor: pointer;
+  font-weight: 500; color: var(--ink-soft);
+}
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+body.show-rooms .rooms { display: flex; }
+.colhead.today { color: var(--now); }
+button.colhead {
+  appearance: none; display: block; width: 100%; height: 100%; margin: 0; border: 0; border-radius: 0; line-height: 1.4;
+  border-bottom: 1px solid var(--line-hour); cursor: pointer; font-family: var(--head); font-weight: 600;
+}
+button.colhead:hover { background: var(--free); }
+.grid.week .colhead { font-size: 16px; }
 
 .status { padding: 8px 16px; font-size: 14px; color: var(--ink-soft); min-height: 0; }
 .status:empty { display: none; }
@@ -121,8 +138,8 @@ a.b.pub:hover { filter: brightness(1.12); }
 .b.short span { display: none; }
 .b.tiny { padding: 0 6px; font-size: 11px; line-height: 1; }
 
-.nowline { position: absolute; left: var(--timecol); right: 0; height: 2px; background: var(--now); z-index: 2; pointer-events: none; }
-.nowline::before {
+.nowline { position: absolute; left: 0; right: 0; height: 2px; background: var(--now); z-index: 2; pointer-events: none; }
+.nowline.first::before {
   content: ''; position: absolute; left: -5px; top: -4px; width: 10px; height: 10px;
   border-radius: 50%; background: var(--now);
 }
@@ -138,7 +155,12 @@ a.b.pub:hover { filter: brightness(1.12); }
 .legend .l-now { background: var(--now); height: 3px; width: 14px; vertical-align: 3px; border-radius: 0; }
 
 @media (max-width: 640px) {
-  .rooms { display: flex; }
+  .grid.week { --timecol: 40px; }
+  .grid.week .colhead { font-size: 14px; padding: 8px 0; }
+  .grid.week .b { left: 1px; right: 1px; padding: 2px 3px; font-size: 11px; }
+  .grid.week .b strong { letter-spacing: -.01em; }
+  .grid.week .b span { display: none; }
+  .grid.week .times div { font-size: 12px; padding-right: 4px; }
   .bar h1 { font-size: 19px; }
   .datepick { display: none; }
   .b { font-size: 14px; }
@@ -153,6 +175,10 @@ a.b.pub:hover { filter: brightness(1.12); }
   <button class="nav" id="prev" aria-label="Előző nap"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></button>
   <button class="nav" id="next" aria-label="Következő nap"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></button>
   <h1 id="title" aria-live="polite"></h1>
+  <div class="seg" role="group" aria-label="Nézet">
+    <button id="vDay" aria-pressed="true">Nap</button>
+    <button id="vWeek" aria-pressed="false">Hét</button>
+  </div>
   <input type="date" class="datepick" id="pick" aria-label="Dátum választása">
   <button class="today" id="today">Ma</button>
 </header>
@@ -207,39 +233,51 @@ const todayBp = () => { const p = bpParts(new Date()); return { y: p.y, m: p.m, 
 
 let rooms = [];
 let day = todayBp();
+let view = 'day';
 let selectedRoom = null;
 let firstRender = true;
 const mobile = window.matchMedia('(max-width: 640px)');
+const wdFmt = new Intl.DateTimeFormat('hu-HU', { timeZone: TZ, weekday: 'short' });
+const monthDayFmt = new Intl.DateTimeFormat('hu-HU', { timeZone: TZ, month: 'long', day: 'numeric' });
+const monthDayShortFmt = new Intl.DateTimeFormat('hu-HU', { timeZone: TZ, month: 'short', day: 'numeric' });
+const dayShortFmt = new Intl.DateTimeFormat('hu-HU', { timeZone: TZ, month: 'short', day: 'numeric', weekday: 'short' });
 
 function rowPx() { return parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--row')); }
+const isoDow = d => { const w = new Date(Date.UTC(d.y, d.m, d.d)).getUTCDay(); return w === 0 ? 7 : w; };
+const weekStart = d => addDays(d, 1 - isoDow(d));
+const sameDay = (a, b) => a.y === b.y && a.m === b.m && a.d === b.d;
+const noon = d => new Date(bpMidnight(d.y, d.m, d.d).getTime() + 12 * 3600000);
 
-function demoData(start) {
-  const at = (h, m) => new Date(start.getTime() + (h * 60 + m) * 60000).toISOString();
-  return {
-    rooms: [1,2,3,4,5,6,7].map(i => ({ id: i, nev: 'Terem ' + i, sorrend: i, helyszin: i < 5 ? 'Mikepércsi út 10' : 'Déli sor 29' })),
-    bookings: [
-      { terem_id: 1, kezdes: at(7, 0), veg: at(8, 30), nev: 'Foglalt', link: null },
-      { terem_id: 1, kezdes: at(17, 0), veg: at(19, 0), nev: 'Jóga Stúdió', link: 'https://example.com' },
-      { terem_id: 2, kezdes: at(16, 0), veg: at(17, 0), nev: 'Foglalt', link: null },
-      { terem_id: 3, kezdes: at(18, 0), veg: at(19, 30), nev: 'TRX Edzés Debrecen', link: 'https://example.com' },
-      { terem_id: 4, kezdes: at(9, 30), veg: at(11, 0), nev: 'Pilates Kft.', link: 'https://example.com' },
-      { terem_id: 4, kezdes: at(18, 0), veg: at(20, 0), nev: 'Pilates Kft.', link: 'https://example.com' },
-      { terem_id: 5, kezdes: at(19, 0), veg: at(19, 30), nev: 'Foglalt', link: null },
-      { terem_id: 6, kezdes: at(0, 0), veg: at(24, 0), nev: 'Engy-Geri', link: 'https://example.com' },
-      { terem_id: 7, kezdes: at(6, 0), veg: at(7, 0), nev: 'Futókör', link: null },
-    ]
-  };
+function demoBookings(start, days) {
+  const out = [];
+  for (let k = 0; k < days; k++) {
+    const d0 = new Date(start.getTime() + k * 86400000);
+    const p = bpParts(d0); const ds = bpMidnight(p.y, p.m, p.d);
+    const at = (h, m) => new Date(ds.getTime() + (h * 60 + m) * 60000).toISOString();
+    const add = (t, h1, m1, h2, m2, nev, link) => out.push({ terem_id: t, kezdes: at(h1, m1), veg: at(h2, m2), nev, link });
+    add(6, 0, 0, 24, 0, 'Engy-Geri', 'https://example.com');
+    if (k % 7 < 5) {
+      add(1, 18, 0, 19, 0, 'Foglalt', null);
+      add(3, 16, 0, 19, 0, 'FittDance', 'https://example.com');
+      add(5, 15, 45, 17, 30, 'Maszk', 'https://example.com');
+      add(7, 15, 0, 20, 0, 'Maszk', 'https://example.com');
+    }
+    if (k % 2 === 0) { add(1, 8, 15, 9, 15, 'Alizetics', 'https://example.com'); add(3, 19, 0, 21, 0, 'Onyx', 'https://example.com'); }
+    if (k % 7 === 5) { add(1, 8, 45, 11, 0, 'Foglalt', null); add(5, 14, 0, 17, 0, 'FamDance', 'https://example.com'); }
+    if (k % 3 === 1) add(4, 18, 0, 19, 30, 'Justitia', 'https://example.com');
+  }
+  return out;
 }
 
 async function loadRooms() {
-  if (DEMO) { rooms = demoData(new Date()).rooms; return; }
+  if (DEMO) { rooms = [1,2,3,4,5,6,7].map(i => ({ id: i, nev: 'Terem ' + i, sorrend: i, helyszin: i < 5 ? 'Mikepércsi út 10' : 'Déli sor 29' })); return; }
   const { data, error } = await db.from('termek').select('*').order('sorrend');
   if (error) throw error;
   rooms = data;
 }
 
 async function loadBookings(start, end) {
-  if (DEMO) return demoData(start).bookings;
+  if (DEMO) return demoBookings(start, Math.round((end - start) / 86400000));
   const { data, error } = await db.rpc('naptar', { tol: start.toISOString(), ig: end.toISOString() });
   if (error) throw error;
   return data;
@@ -248,76 +286,99 @@ async function loadBookings(start, end) {
 function renderRoomChips() {
   const nav = $('rooms');
   nav.innerHTML = '';
+  let chips = null;
   rooms.forEach((r, i) => {
-    if (i > 0 && r.helyszin !== rooms[i - 1].helyszin) {
-      const g = document.createElement('span'); g.className = 'gap'; g.setAttribute('aria-hidden', 'true'); nav.appendChild(g);
+    if (i === 0 || r.helyszin !== rooms[i - 1].helyszin) {
+      const g = document.createElement('div'); g.className = 'rgroup';
+      const l = document.createElement('span'); l.className = 'rlabel';
+      l.textContent = r.helyszin ? 'Termek: ' + r.helyszin : 'Termek';
+      chips = document.createElement('div'); chips.className = 'rchips';
+      g.append(l, chips); nav.appendChild(g);
     }
     const b = document.createElement('button');
-    b.textContent = r.nev.replace(/^Terem\s*/i, '') || r.nev;
+    b.textContent = mobile.matches ? (r.nev.replace(/^Terem\s*/i, '') || r.nev) : r.nev;
     b.setAttribute('aria-label', r.nev + (r.helyszin ? ', ' + r.helyszin : ''));
     if (r.helyszin) b.title = r.helyszin;
     b.setAttribute('aria-pressed', String(r.id === selectedRoom));
     b.onclick = () => { selectedRoom = r.id; renderRoomChips(); refresh(); };
-    nav.appendChild(b);
+    chips.appendChild(b);
   });
 }
 
-function build(bookings, start, end) {
+function setView(v) {
+  view = v;
+  $('vDay').setAttribute('aria-pressed', String(v === 'day'));
+  $('vWeek').setAttribute('aria-pressed', String(v === 'week'));
+  $('prev').setAttribute('aria-label', v === 'day' ? 'Előző nap' : 'Előző hét');
+  $('next').setAttribute('aria-label', v === 'day' ? 'Következő nap' : 'Következő hét');
+  refresh();
+}
+$('vDay').onclick = () => setView('day');
+$('vWeek').onclick = () => setView('week');
+
+/* local-clock minutes of t within the given local day, clamped to 0..1440 */
+function minutesIn(t, d, ds, de) {
+  if (t <= ds) return 0;
+  if (t >= de) return 1440;
+  const p = bpParts(t);
+  return p.h * 60 + p.min;
+}
+
+/* cols: [{ label, title?, onClick?, today, locStart, d, ds, de, bookings }] ; groups: [{ label, span }] */
+function build(cols, groups) {
   const grid = $('grid');
-  const visible = mobile.matches ? rooms.filter(r => r.id === selectedRoom) : rooms;
-  grid.style.setProperty('--cols', visible.length);
+  grid.classList.toggle('week', view === 'week');
+  grid.style.setProperty('--cols', cols.length);
   grid.innerHTML = '';
   const row = rowPx();
-  const dayMin = (end - start) / 60000;
-  const slots = Math.round(dayMin / 30);
+  const slots = 48;
 
-  const locStart = (r, i) => i > 0 && r.helyszin !== visible[i - 1].helyszin;
-  const hasLoc = visible.some(r => r.helyszin);
-  grid.style.setProperty('--gh', hasLoc ? '28px' : '0px');
-  if (hasLoc) {
+  const hasGroups = groups.some(g => g.label);
+  grid.style.setProperty('--gh', hasGroups ? '28px' : '0px');
+  if (hasGroups) {
     const gc = document.createElement('div'); gc.className = 'grouphead corner'; grid.appendChild(gc);
-    let i = 0;
-    while (i < visible.length) {
-      let j = i; while (j + 1 < visible.length && visible[j + 1].helyszin === visible[i].helyszin) j++;
-      const g = document.createElement('div');
-      g.className = 'grouphead';
-      g.style.gridColumn = 'span ' + (j - i + 1);
-      g.textContent = visible[i].helyszin || '';
-      grid.appendChild(g);
-      i = j + 1;
-    }
+    groups.forEach(g => {
+      const el = document.createElement('div');
+      el.className = 'grouphead';
+      el.style.gridColumn = 'span ' + g.span;
+      el.textContent = g.label || '';
+      grid.appendChild(el);
+    });
   }
-  const corner = document.createElement('div');
-  corner.className = 'colhead corner';
-  grid.appendChild(corner);
-  visible.forEach((r, i) => {
-    const h = document.createElement('div');
-    h.className = 'colhead' + (locStart(r, i) ? ' loc-start' : '');
-    h.textContent = r.nev;
+  const corner = document.createElement('div'); corner.className = 'colhead corner'; grid.appendChild(corner);
+  cols.forEach(c => {
+    const h = document.createElement(c.onClick ? 'button' : 'div');
+    h.className = 'colhead' + (c.locStart ? ' loc-start' : '') + (c.today && view === 'week' ? ' today' : '');
+    h.textContent = c.label;
+    if (c.title) h.title = c.title;
+    if (c.onClick) { h.type = 'button'; h.onclick = c.onClick; }
     grid.appendChild(h);
   });
-
   grid.style.setProperty('--hh', grid.querySelector('.colhead:not(.corner)').offsetHeight + 'px');
+
   const times = document.createElement('div');
   times.className = 'times';
   for (let i = 0; i < slots; i++) {
     const t = document.createElement('div');
-    const at = new Date(start.getTime() + i * 30 * 60000);
-    t.textContent = i === 0 ? '' : hmFmt.format(at);
-    if (bpParts(at).min !== 0) t.className = 'half';
+    t.textContent = i === 0 ? '' : `${String(Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`;
+    if (i % 2) t.className = 'half';
     times.appendChild(t);
   }
   grid.appendChild(times);
 
-  visible.forEach((r, i) => {
+  const now = new Date();
+  let firstNow = true;
+  cols.forEach(c => {
     const col = document.createElement('div');
-    col.className = 'col' + (locStart(r, i) ? ' loc-start' : '');
+    col.className = 'col' + (c.locStart ? ' loc-start' : '');
     col.style.height = (slots * row) + 'px';
     col.setAttribute('role', 'list');
-    col.setAttribute('aria-label', r.nev + (r.helyszin ? ', ' + r.helyszin : '') + ' foglalásai');
-    bookings.filter(b => b.terem_id === r.id).forEach(b => {
-      const s = Math.max(0, (new Date(b.kezdes) - start) / 60000);
-      const e = Math.min(dayMin, (new Date(b.veg) - start) / 60000);
+    col.setAttribute('aria-label', (c.title || c.label) + ' foglalásai');
+    c.bookings.forEach(b => {
+      const k = new Date(b.kezdes), v = new Date(b.veg);
+      if (v <= c.ds || k >= c.de) return;
+      const s = minutesIn(k, c.d, c.ds, c.de);
+      const e = minutesIn(v, c.d, c.ds, c.de);
       if (e <= s) return;
       const el = document.createElement(b.link ? 'a' : 'div');
       el.className = 'b ' + (b.link || b.nev !== 'Foglalt' ? 'pub' : 'priv');
@@ -326,7 +387,7 @@ function build(bookings, start, end) {
       el.style.top = (s / 30 * row + 1) + 'px';
       el.style.height = ((e - s) / 30 * row - 2) + 'px';
       el.setAttribute('role', 'listitem');
-      const range = (s === 0 && e === dayMin) ? 'Egész nap' : hmFmt.format(new Date(b.kezdes)) + '–' + hmFmt.format(new Date(b.veg));
+      const range = (s === 0 && e === 1440) ? 'Egész nap' : hmFmt.format(k) + '–' + hmFmt.format(v);
       el.innerHTML = '<div class="lbl"><strong></strong><span></span></div>';
       el.querySelector('strong').textContent = b.nev;
       el.querySelector('span').textContent = range;
@@ -340,47 +401,104 @@ function build(bookings, start, end) {
       }
       col.appendChild(el);
     });
+    if (now >= c.ds && now < c.de) {
+      const line = document.createElement('div');
+      line.className = 'nowline' + (firstNow ? ' first' : '');
+      firstNow = false;
+      const p = bpParts(now);
+      line.style.top = ((p.h * 60 + p.min) / 30 * row - 1) + 'px';
+      col.appendChild(line);
+    }
     grid.appendChild(col);
   });
-
-  const now = new Date();
-  if (now >= start && now < end) {
-    const line = document.createElement('div');
-    line.className = 'nowline';
-    const headH = grid.querySelector('.col').offsetTop;
-    line.style.top = (headH + (now - start) / 60000 / 30 * row - 1) + 'px';
-    grid.appendChild(line);
-  }
   return { row };
 }
 
+function dayCols(bookings, d) {
+  const ds = bpMidnight(d.y, d.m, d.d), nd = addDays(d, 1), de = bpMidnight(nd.y, nd.m, nd.d);
+  const today = sameDay(d, todayBp());
+  const visible = mobile.matches ? rooms.filter(r => r.id === selectedRoom) : rooms;
+  const cols = visible.map((r, i) => ({
+    label: r.nev, title: r.nev + (r.helyszin ? ', ' + r.helyszin : ''), today,
+    locStart: i > 0 && r.helyszin !== visible[i - 1].helyszin,
+    d, ds, de, bookings: bookings.filter(b => b.terem_id === r.id),
+  }));
+  const groups = [];
+  visible.forEach((r, i) => {
+    if (i > 0 && r.helyszin === visible[i - 1].helyszin) groups[groups.length - 1].span++;
+    else groups.push({ label: r.helyszin, span: 1 });
+  });
+  return { cols, groups };
+}
+
+function weekCols(bookings, ws) {
+  const room = rooms.find(r => r.id === selectedRoom) || rooms[0];
+  const tday = todayBp();
+  const cols = [];
+  for (let k = 0; k < 7; k++) {
+    const d = addDays(ws, k);
+    const ds = bpMidnight(d.y, d.m, d.d), nd = addDays(d, 1), de = bpMidnight(nd.y, nd.m, nd.d);
+    const wd = wdFmt.format(noon(d)).replace('.', '');
+    cols.push({
+      label: `${wd.charAt(0).toUpperCase() + wd.slice(1)} ${d.d}.`,
+      title: titleFmt.format(noon(d)) + ' – megnyitás napi nézetben',
+      today: sameDay(d, tday),
+      onClick: () => { day = d; setView('day'); },
+      d, ds, de, bookings: bookings.filter(b => b.terem_id === room.id),
+    });
+  }
+  const label = room.nev + (room.helyszin ? ', ' + room.helyszin : '');
+  return { cols, groups: [{ label, span: 7 }] };
+}
+
+function weekTitle(ws) {
+  const we = addDays(ws, 6);
+  const f = mobile.matches ? monthDayShortFmt : monthDayFmt;
+  const first = f.format(noon(ws)).replace(/\.$/, '');
+  if (ws.m === we.m) return `${first}–${we.d}.`;
+  return `${first} – ${f.format(noon(we))}`;
+}
+
+let reqId = 0;
 async function refresh() {
-  const start = bpMidnight(day.y, day.m, day.d);
-  const nd = addDays(day, 1);
-  const end = bpMidnight(nd.y, nd.m, nd.d);
-  $('title').textContent = titleFmt.format(new Date(start.getTime() + 12 * 3600000));
+  const my = ++reqId;
+  document.body.classList.toggle('show-rooms', view === 'week' || mobile.matches);
+  let start, end, ws;
+  if (view === 'day') {
+    start = bpMidnight(day.y, day.m, day.d);
+    const nd = addDays(day, 1); end = bpMidnight(nd.y, nd.m, nd.d);
+    $('title').textContent = (mobile.matches ? dayShortFmt : titleFmt).format(noon(day));
+  } else {
+    ws = weekStart(day);
+    start = bpMidnight(ws.y, ws.m, ws.d);
+    const we = addDays(ws, 7); end = bpMidnight(we.y, we.m, we.d);
+    $('title').textContent = weekTitle(ws);
+  }
   $('pick').value = iso(day);
   try {
     const bookings = await loadBookings(start, end);
+    if (my !== reqId) return;
     $('status').textContent = '';
     $('status').className = 'status';
-    const { row } = build(bookings, start, end);
+    const { cols, groups } = view === 'day' ? dayCols(bookings, day) : weekCols(bookings, ws);
+    const { row } = build(cols, groups);
     if (firstRender) {
       firstRender = false;
-      const now = new Date();
-      const target = (now >= start && now < end) ? (now - start) / 60000 - 60 : 7 * 60;
+      const p = bpParts(new Date());
+      const target = sameDay(day, todayBp()) ? p.h * 60 + p.min - 60 : 7 * 60;
       $('scroller').style.scrollBehavior = 'auto';
       $('scroller').scrollTop = Math.max(0, target / 30 * row);
       $('scroller').style.scrollBehavior = '';
     }
   } catch (err) {
+    if (my !== reqId) return;
     console.error(err);
     $('status').className = 'status err';
     $('status').textContent = 'Nem sikerült betölteni a naptárt. Ellenőrizd az internetkapcsolatot, és frissítsd az oldalt.';
   }
 }
 
-function go(n) { day = addDays(day, n); refresh(); }
+function go(n) { day = addDays(day, view === 'day' ? n : 7 * n); refresh(); }
 $('prev').onclick = () => go(-1);
 $('next').onclick = () => go(1);
 $('today').onclick = () => { day = todayBp(); firstRender = true; refresh(); };
@@ -388,7 +506,7 @@ $('pick').onchange = e => {
   const [y, m, d] = e.target.value.split('-').map(Number);
   if (y) { day = { y, m: m - 1, d }; refresh(); }
 };
-mobile.addEventListener('change', () => refresh());
+mobile.addEventListener('change', () => { renderRoomChips(); refresh(); });
 document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
 setInterval(() => { if (!document.hidden) refresh(); }, 60000);
 
