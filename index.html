@@ -174,6 +174,7 @@ const SUPABASE_URL = 'https://bzcqamsnziqnbroihjot.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_eaVUut5YEnXdcRz3E4ImRA_vO9TKKjx';
 const TZ = 'Europe/Budapest';
 const DEMO = new URLSearchParams(location.search).has('demo');
+const IN_FRAME = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
 
 const db = DEMO ? null : window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } });
 
@@ -330,7 +331,13 @@ function build(bookings, start, end) {
       el.querySelector('strong').textContent = b.nev;
       el.querySelector('span').textContent = range;
       el.title = b.nev + ', ' + range;
-      if (b.link) { el.href = b.link; el.target = '_blank'; el.rel = 'noopener'; }
+      if (b.link) {
+        el.href = b.link;
+        // Wix-kereten belül új lapot a Safari letilt (Cross-Origin-Opener-Policy),
+        // ezért ott a teljes oldal helyén nyitjuk meg. Önállóan új lapon.
+        el.target = IN_FRAME ? '_top' : '_blank';
+        el.rel = 'noopener';
+      }
       col.appendChild(el);
     });
     grid.appendChild(col);
