@@ -1,0 +1,770 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Foglalások kezelése</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --paper: #ffffff;
+  --ink: #1e2a2f;
+  --ink-soft: #5b6870;
+  --line: #e3e6e8;
+  --line-hour: #cdd3d6;
+  --free: #f6f8f8;
+  --booked: #1f6f5c;
+  --booked-ink: #ffffff;
+  --private: #d9dee1;
+  --private-ink: #3d4a51;
+  --now: #e4572e;
+  --danger: #a3321a;
+  --row: 26px;
+  --timecol: 52px;
+  --head: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  --body: 'Barlow', system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--paper); color: var(--ink);
+  font-family: var(--body); font-size: 15px; line-height: 1.4;
+  display: flex; flex-direction: column;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--now); outline-offset: 2px; }
+[hidden] { display: none !important; }
+
+.btn {
+  height: 36px; padding: 0 14px; border-radius: 6px; border: 1px solid var(--line-hour);
+  background: var(--paper); cursor: pointer; font-weight: 500; white-space: nowrap;
+}
+.btn:hover { background: var(--free); }
+.btn.primary { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.btn.primary:hover { background: #2f3f46; }
+.btn.danger { color: var(--danger); border-color: #e5b9ae; }
+.btn.danger:hover { background: #fbf0ed; }
+.btn.icon { width: 36px; padding: 0; display: grid; place-items: center; }
+
+/* Login */
+.login { margin: auto; width: min(360px, calc(100% - 32px)); padding: 32px 0; }
+.login h1 { font-family: var(--head); font-weight: 600; font-size: 28px; margin: 0 0 20px; }
+
+label.f { display: block; margin-bottom: 14px; }
+label.f > span { display: block; font-size: 14px; font-weight: 500; margin-bottom: 4px; }
+label.f small { display: block; color: var(--ink-soft); font-size: 13px; margin-top: 3px; }
+.in {
+  width: 100%; height: 38px; border: 1px solid var(--line-hour); border-radius: 6px;
+  padding: 0 10px; background: var(--paper);
+}
+textarea.in { height: 64px; padding: 8px 10px; resize: vertical; }
+.check { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; font-weight: 500; }
+.check input { width: 18px; height: 18px; accent-color: var(--ink); }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.err { color: var(--danger); font-size: 14px; margin: 0 0 12px; }
+.err:empty { display: none; }
+
+/* App bar */
+.bar {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 12px 16px; border-bottom: 1px solid var(--line);
+}
+.tabs { display: flex; gap: 4px; margin-right: 8px; }
+.tabs button {
+  height: 36px; padding: 0 14px; border: 0; border-radius: 6px; background: none; cursor: pointer;
+  font-family: var(--head); font-weight: 600; font-size: 18px; color: var(--ink-soft);
+}
+.tabs button[aria-selected="true"] { background: var(--free); color: var(--ink); }
+.bar h1 {
+  font-family: var(--head); font-weight: 600; font-size: 22px;
+  margin: 0 auto 0 4px; white-space: nowrap;
+}
+.spacer { margin-left: auto; }
+.hint { padding: 8px 16px; font-size: 14px; color: var(--ink-soft); border-bottom: 1px solid var(--line); }
+
+.toast {
+  position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
+  background: var(--ink); color: var(--paper); padding: 10px 16px; border-radius: 6px;
+  font-size: 14px; z-index: 20; max-width: calc(100% - 32px);
+}
+.toast.bad { background: var(--danger); }
+
+/* Calendar */
+.scroller { flex: 1; overflow: auto; position: relative; }
+.grid { display: grid; position: relative; grid-template-columns: var(--timecol) repeat(7, minmax(110px, 1fr)); }
+.colhead {
+  position: sticky; top: 0; z-index: 3; background: var(--paper);
+  border-bottom: 1px solid var(--line-hour);
+  font-family: var(--head); font-weight: 600; font-size: 17px; text-align: center; padding: 8px 2px;
+}
+.corner { left: 0; z-index: 4; }
+.times { position: sticky; left: 0; z-index: 2; background: var(--paper); }
+.times div {
+  height: var(--row); font-family: var(--head); font-weight: 500; font-size: 13px;
+  color: var(--ink-soft); text-align: right; padding-right: 8px; transform: translateY(-8px);
+}
+.times div.half { visibility: hidden; }
+.col {
+  position: relative; border-left: 1px solid var(--line); cursor: cell;
+  background-image: repeating-linear-gradient(to bottom,
+    var(--line-hour) 0 1px, transparent 1px var(--row),
+    var(--line) var(--row) calc(var(--row) + 1px), transparent calc(var(--row) + 1px) calc(var(--row) * 2));
+}
+.ghost {
+  position: absolute; left: 3px; right: 3px; height: calc(var(--row) - 2px);
+  border: 1.5px dashed var(--ink-soft); border-radius: 5px; pointer-events: none;
+  font-size: 12px; color: var(--ink-soft); padding: 2px 6px; font-family: var(--head);
+}
+.b {
+  position: absolute; left: 3px; right: 3px; border-radius: 5px; border: 0; text-align: left;
+  padding: 3px 6px; overflow: hidden; font-size: 13px; line-height: 1.25; cursor: pointer;
+}
+.b strong { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.b span { font-family: var(--head); font-weight: 500; opacity: .85; }
+.b.pub { background: var(--booked); color: var(--booked-ink); }
+.b.priv { color: var(--private-ink); background: repeating-linear-gradient(135deg, var(--private) 0 6px, #e6eaec 6px 12px); }
+.b.series::after {
+  content: '↻'; position: absolute; right: 5px; top: 2px; font-size: 13px; opacity: .8;
+}
+.b:hover { filter: brightness(1.08); }
+.b.short span { display: none; }
+.nowline { position: absolute; left: var(--timecol); right: 0; height: 2px; background: var(--now); z-index: 1; pointer-events: none; }
+
+/* Tenants */
+.tenants { flex: 1; overflow: auto; padding: 16px; }
+.tenants .top { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; max-width: 900px; }
+.tenants .top .in { max-width: 280px; }
+table.t { border-collapse: collapse; width: 100%; max-width: 900px; font-size: 14px; }
+table.t th { text-align: left; font-weight: 500; color: var(--ink-soft); padding: 8px; border-bottom: 1px solid var(--line-hour); }
+table.t td { padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.t tr:hover td { background: var(--free); cursor: pointer; }
+.pill { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 10px; background: var(--free); color: var(--ink-soft); border: 1px solid var(--line); }
+.pill.on { background: #e3f1ec; color: #155244; border-color: #bcdcd1; }
+.empty { color: var(--ink-soft); padding: 24px 8px; }
+
+/* Dialog */
+dialog {
+  border: 0; border-radius: 10px; padding: 0; width: min(440px, calc(100% - 24px));
+  box-shadow: 0 12px 40px rgba(30, 42, 47, .25);
+}
+dialog::backdrop { background: rgba(30, 42, 47, .45); }
+dialog form { padding: 20px; }
+dialog h2 { font-family: var(--head); font-weight: 600; font-size: 22px; margin: 0 0 16px; }
+.meta { font-size: 14px; color: var(--ink-soft); margin: -8px 0 16px; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; margin-top: 8px; }
+.actions .left { margin-right: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+.repeat { border: 1px solid var(--line); border-radius: 8px; padding: 12px 12px 0; margin-bottom: 14px; }
+
+@media (max-width: 640px) {
+  .bar h1 { font-size: 18px; order: 5; width: 100%; margin: 4px 0 0; }
+  .row2 { grid-template-columns: 1fr; gap: 0; }
+}
+</style>
+</head>
+<body>
+
+<section class="login" id="loginView" hidden>
+  <h1>Foglalások kezelése</h1>
+  <form id="loginForm">
+    <label class="f"><span>E-mail cím</span><input class="in" type="email" id="email" autocomplete="username" required></label>
+    <label class="f"><span>Jelszó</span><input class="in" type="password" id="password" autocomplete="current-password" required></label>
+    <p class="err" id="loginErr"></p>
+    <button class="btn primary" type="submit" style="width:100%">Belépés</button>
+  </form>
+</section>
+
+<div id="appView" hidden style="display:contents">
+  <header class="bar">
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tabCal" aria-selected="true">Naptár</button>
+      <button role="tab" id="tabTen" aria-selected="false">Bérlők</button>
+    </div>
+    <span id="calNav" style="display:contents">
+      <button class="btn icon" id="prev" aria-label="Előző nap"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></button>
+      <button class="btn icon" id="next" aria-label="Következő nap"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></button>
+      <h1 id="title"></h1>
+      <input type="date" class="in" id="pick" style="width:auto" aria-label="Dátum választása">
+      <button class="btn" id="today">Ma</button>
+    </span>
+    <span class="spacer" id="tenSpacer" hidden></span>
+    <button class="btn" id="logout">Kilépés</button>
+  </header>
+
+  <section id="calView" style="display:contents">
+    <div class="hint">Új foglaláshoz kattints egy üres sávra. Meglévő foglalás szerkesztéséhez kattints rá. A ↻ jel ismétlődő sorozatot jelöl.</div>
+    <main class="scroller" id="scroller"><div class="grid" id="grid"></div></main>
+  </section>
+
+  <section class="tenants" id="tenView" hidden>
+    <div class="top">
+      <input class="in" type="search" id="tenSearch" placeholder="Keresés név szerint" aria-label="Bérlő keresése">
+      <button class="btn primary" id="newTenant">Új bérlő</button>
+    </div>
+    <table class="t">
+      <thead><tr><th>Név</th><th>A naptárban így látszik</th><th>Elérhetőség</th></tr></thead>
+      <tbody id="tenRows"></tbody>
+    </table>
+  </section>
+</div>
+
+<!-- Booking dialog -->
+<dialog id="bDlg">
+  <form method="dialog" id="bForm">
+    <h2 id="bTitle">Új foglalás</h2>
+    <p class="meta" id="bMeta" hidden></p>
+    <label class="f"><span>Terem</span><select class="in" id="bRoom"></select></label>
+    <div class="row2">
+      <label class="f"><span>Nap</span><input class="in" type="date" id="bDate" required></label>
+      <label class="f"><span>Kezdés</span><select class="in" id="bStart"></select></label>
+    </div>
+    <label class="f"><span>Időtartam</span><select class="in" id="bDur"></select></label>
+    <label class="f"><span>Bérlő</span>
+      <select class="in" id="bTenant"></select>
+      <small><a href="#" id="bNewTenant">Új bérlő felvétele</a></small>
+    </label>
+    <label class="f"><span>Megjegyzés</span><textarea class="in" id="bNote" placeholder="Csak te látod"></textarea></label>
+    <div id="bRepeatWrap">
+      <label class="check"><input type="checkbox" id="bRepeat"> Ismétlés hetente</label>
+      <div class="repeat" id="bRepeatBox" hidden>
+        <label class="f"><span>Utolsó alkalom legkésőbb</span><input class="in" type="date" id="bUntil">
+          <small id="bRepeatInfo"></small></label>
+      </div>
+    </div>
+    <p class="err" id="bErr"></p>
+    <div class="actions">
+      <span class="left" id="bDelWrap" hidden>
+        <button type="button" class="btn danger" id="bDelOne">Törlés</button>
+        <button type="button" class="btn danger" id="bDelSeries" hidden>Ezt és a későbbieket törlöm</button>
+      </span>
+      <button type="button" class="btn" id="bCancel">Mégse</button>
+      <button type="submit" class="btn primary" id="bSave">Mentés</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Tenant dialog -->
+<dialog id="tDlg">
+  <form method="dialog" id="tForm">
+    <h2 id="tTitle">Új bérlő</h2>
+    <label class="f"><span>Név</span><input class="in" id="tName" required><small>Ahogy te ismered, pl. „Kiss Anna – jóga”</small></label>
+    <label class="check"><input type="checkbox" id="tPublic"> Név és link látszódjon a nyilvános naptárban</label>
+    <div id="tPubBox">
+      <label class="f"><span>Megjelenő név</span><input class="in" id="tDisplay"><small>Ha üres, a fenti név jelenik meg</small></label>
+      <label class="f"><span>Link (weboldal vagy Facebook)</span><input class="in" type="text" inputmode="url" autocomplete="url" id="tLink" placeholder="https://facebook.com/…"></label>
+    </div>
+    <label class="f"><span>Elérhetőség</span><input class="in" id="tContact" placeholder="Telefon vagy e-mail"><small>Csak te látod</small></label>
+    <label class="f"><span>Megjegyzés</span><textarea class="in" id="tNote" placeholder="Csak te látod"></textarea></label>
+    <p class="err" id="tErr"></p>
+    <div class="actions">
+      <button type="button" class="btn" id="tCancel">Mégse</button>
+      <button type="submit" class="btn primary">Mentés</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" hidden role="status"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SUPABASE_URL = 'https://bzcqamsnziqnbroihjot.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_eaVUut5YEnXdcRz3E4ImRA_vO9TKKjx';
+const TZ = 'Europe/Budapest';
+const DEMO = new URLSearchParams(location.search).has('demo');
+const $ = id => document.getElementById(id);
+
+/* ---------- Time helpers (Budapest) ---------- */
+const partsFmt = new Intl.DateTimeFormat('en-US', { timeZone: TZ, hourCycle: 'h23',
+  year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const hmFmt = new Intl.DateTimeFormat('hu-HU', { timeZone: TZ, hour: '2-digit', minute: '2-digit' });
+const titleFmt = new Intl.DateTimeFormat('hu-HU', { timeZone: TZ, year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+const shortDateFmt = new Intl.DateTimeFormat('hu-HU', { timeZone: TZ, month: 'long', day: 'numeric', weekday: 'short' });
+function bpParts(date) {
+  const p = Object.fromEntries(partsFmt.formatToParts(date).map(x => [x.type, x.value]));
+  return { y: +p.year, m: +p.month - 1, d: +p.day, h: +p.hour, min: +p.minute, s: +p.second };
+}
+function offsetMs(date) {
+  const p = bpParts(date);
+  return Date.UTC(p.y, p.m, p.d, p.h, p.min, p.s) - Math.floor(date.getTime() / 1000) * 1000;
+}
+function bpTime(y, m, d, h = 0, min = 0) {
+  const guess = Date.UTC(y, m, d, h, min);
+  let t = guess - offsetMs(new Date(guess));
+  t = guess - offsetMs(new Date(t));
+  return new Date(t);
+}
+function addDays(day, n) {
+  const u = new Date(Date.UTC(day.y, day.m, day.d + n));
+  return { y: u.getUTCFullYear(), m: u.getUTCMonth(), d: u.getUTCDate() };
+}
+const iso = day => `${day.y}-${String(day.m + 1).padStart(2, '0')}-${String(day.d).padStart(2, '0')}`;
+const parseIso = s => { const [y, m, d] = s.split('-').map(Number); return { y, m: m - 1, d }; };
+const todayBp = () => { const p = bpParts(new Date()); return { y: p.y, m: p.m, d: p.d }; };
+const hm = mins => `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
+const isoDow = day => { const w = new Date(Date.UTC(day.y, day.m, day.d)).getUTCDay(); return w === 0 ? 7 : w; };
+const DOW = ['', 'hétfő', 'kedd', 'szerda', 'csütörtök', 'péntek', 'szombat', 'vasárnap'];
+function durLabel(m) {
+  const h = Math.floor(m / 60), r = m % 60;
+  return (h ? h + ' óra' : '') + (h && r ? ' ' : '') + (r ? r + ' perc' : '');
+}
+
+/* ---------- Data layer ---------- */
+function friendlyError(err) {
+  const msg = (err && (err.message || err.error_description)) || String(err);
+  if (err && err.code === '23P01') return 'Ütközik egy meglévő foglalással ugyanebben a teremben.';
+  if (/foglalas_veg_kezdes_utan/.test(msg)) return 'A foglalás vége a kezdés után kell legyen.';
+  if (/felora/.test(msg)) return 'Csak egész vagy fél órára lehet foglalni.';
+  if (/Invalid login credentials/i.test(msg)) return 'Hibás e-mail cím vagy jelszó.';
+  if (/Failed to fetch|NetworkError/i.test(msg)) return 'Nincs kapcsolat a szerverrel. Ellenőrizd az internetet.';
+  if (/^Ütközés:/.test(msg)) return msg + '. Semmi nem lett elmentve, válassz másik időpontot vagy rövidebb időszakot.';
+  if (/Nincs jogosultság/.test(msg)) return 'Ehhez a fiókhoz nincs admin jog.';
+  return msg;
+}
+
+let api;
+if (!DEMO) {
+  const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  const chk = ({ data, error }) => { if (error) throw error; return data; };
+  api = {
+    async session() { return (await db.auth.getSession()).data.session; },
+    async login(email, password) { chk(await db.auth.signInWithPassword({ email, password })); },
+    async logout() { await db.auth.signOut(); },
+    async isAdmin() { const d = chk(await db.from('adminok').select('user_id')); return d.length > 0; },
+    async rooms() { return chk(await db.from('termek').select('id, nev, sorrend').order('sorrend')); },
+    async tenants() { return chk(await db.from('berlok').select('*').order('nev')); },
+    async bookings(start, end) {
+      return chk(await db.from('foglalasok').select('*')
+        .lt('kezdes', end.toISOString()).gt('veg', start.toISOString()).order('kezdes'));
+    },
+    async addBooking(b) { chk(await db.from('foglalasok').insert(b)); },
+    async updateBooking(id, b) { chk(await db.from('foglalasok').update(b).eq('id', id)); },
+    async deleteBooking(id) { chk(await db.from('foglalasok').delete().eq('id', id)); },
+    async deleteSeriesFrom(seriesId, fromIso) {
+      chk(await db.from('foglalasok').delete().eq('sorozat_id', seriesId).gte('kezdes', fromIso));
+    },
+    async addSeries(p) { return chk(await db.rpc('sorozat_letrehozasa', p)); },
+    async saveTenant(id, t) {
+      if (id) return chk(await db.from('berlok').update(t).eq('id', id).select().single());
+      return chk(await db.from('berlok').insert(t).select().single());
+    },
+  };
+} else {
+  /* Próbaüzem helyi adatokkal: admin.html?demo=1 */
+  const mem = { tenants: [], bookings: [], seq: 1, sseq: 1 };
+  const t0 = todayBp();
+  const at = (dd, h, mi) => { const d = addDays(t0, dd); return bpTime(d.y, d.m, d.d, h, mi).toISOString(); };
+  mem.tenants = [
+    { id: 1, nev: 'Kiss Anna – jóga', megjeleno_nev: 'Jóga Stúdió', link: 'https://example.com', nyilvanos: true, elerhetoseg: '+36 30 123 4567', megjegyzes: null },
+    { id: 2, nev: 'Nagy Béla', megjeleno_nev: null, link: null, nyilvanos: false, elerhetoseg: 'bela@pelda.hu', megjegyzes: 'Csak hétvégén' },
+  ];
+  mem.bookings = [
+    { id: mem.seq++, terem_id: 1, berlo_id: 1, kezdes: at(0, 17, 0), veg: at(0, 19, 0), sorozat_id: null, megjegyzes: null },
+    { id: mem.seq++, terem_id: 3, berlo_id: 2, kezdes: at(0, 18, 0), veg: at(0, 19, 30), sorozat_id: null, megjegyzes: 'Kulcsot kér' },
+  ];
+  const overlap = (b, ex) => mem.bookings.some(o => o.id !== ex && o.terem_id === b.terem_id &&
+    new Date(o.kezdes) < new Date(b.veg) && new Date(o.veg) > new Date(b.kezdes));
+  const conflictErr = () => Object.assign(new Error('conflicting key value violates exclusion constraint'), { code: '23P01' });
+  const wait = () => new Promise(r => setTimeout(r, 120));
+  let logged = false;
+  api = {
+    async session() { return logged ? {} : null; },
+    async login(e, p) { await wait(); if (!e || !p) throw new Error('Invalid login credentials'); logged = true; },
+    async logout() { logged = false; },
+    async isAdmin() { return true; },
+    async rooms() { return [1,2,3,4,5,6,7].map(i => ({ id: i, nev: 'Terem ' + i, sorrend: i })); },
+    async tenants() { return [...mem.tenants].sort((a, b) => a.nev.localeCompare(b.nev, 'hu')); },
+    async bookings(s, e) { await wait(); return mem.bookings.filter(b => new Date(b.kezdes) < e && new Date(b.veg) > s); },
+    async addBooking(b) { await wait(); if (overlap(b)) throw conflictErr(); mem.bookings.push({ id: mem.seq++, sorozat_id: null, ...b }); },
+    async updateBooking(id, b) { await wait(); if (overlap(b, id)) throw conflictErr(); Object.assign(mem.bookings.find(x => x.id === id), b); },
+    async deleteBooking(id) { mem.bookings = mem.bookings.filter(b => b.id !== id); },
+    async deleteSeriesFrom(sid, from) { mem.bookings = mem.bookings.filter(b => !(b.sorozat_id === sid && b.kezdes >= from)); },
+    async addSeries(p) {
+      await wait();
+      const sid = mem.sseq++, add = [];
+      let d = parseIso(p.p_ervenyes_tol); const end = parseIso(p.p_ervenyes_ig);
+      const [h, mi] = p.p_kezdes_ido.split(':').map(Number);
+      while (iso(d) <= iso(end)) {
+        if (isoDow(d) === p.p_het_napja) {
+          const k = bpTime(d.y, d.m, d.d, h, mi);
+          const b = { terem_id: p.p_terem_id, berlo_id: p.p_berlo_id, kezdes: k.toISOString(),
+            veg: new Date(k.getTime() + p.p_hossz_perc * 60000).toISOString(), sorozat_id: sid, megjegyzes: p.p_megjegyzes };
+          if (overlap(b) || add.some(o => o.terem_id === b.terem_id && o.kezdes < b.veg && o.veg > b.kezdes))
+            throw new Error(`Ütközés: Terem ${b.terem_id} már foglalt ekkor: ${iso(d).replace(/-/g, '.')}. ${p.p_kezdes_ido}`);
+          add.push(b);
+        }
+        d = addDays(d, 1);
+      }
+      add.forEach(b => mem.bookings.push({ id: mem.seq++, ...b }));
+      return sid;
+    },
+    async saveTenant(id, t) {
+      await wait();
+      if (id) { const x = mem.tenants.find(z => z.id === id); Object.assign(x, t); return x; }
+      const x = { id: 100 + mem.tenants.length, ...t }; mem.tenants.push(x); return x;
+    },
+  };
+}
+
+/* ---------- State ---------- */
+let rooms = [], tenants = [], bookings = [];
+let day = todayBp();
+let scrolled = false;
+let editing = null;          // booking being edited, or null for new
+let tenantEditing = null;    // tenant id or null
+let tenantReturnToBooking = false;
+
+function toast(msg, bad = false) {
+  const t = $('toast');
+  t.textContent = msg; t.className = 'toast' + (bad ? ' bad' : ''); t.hidden = false;
+  clearTimeout(toast.h); toast.h = setTimeout(() => { t.hidden = true; }, bad ? 6000 : 2500);
+}
+const rowPx = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--row'));
+const tenantById = id => tenants.find(t => t.id === id);
+
+/* ---------- Auth ---------- */
+async function boot() {
+  const s = await api.session();
+  if (!s) return showLogin();
+  try {
+    if (!(await api.isAdmin())) {
+      await api.logout();
+      return showLogin('Ehhez a fiókhoz nincs admin jog.');
+    }
+  } catch (e) { return showLogin(friendlyError(e)); }
+  showApp();
+}
+function showLogin(msg = '') {
+  $('appView').hidden = true; $('loginView').hidden = false;
+  $('loginErr').textContent = msg;
+}
+async function showApp() {
+  $('loginView').hidden = true; $('appView').hidden = false;
+  try {
+    [rooms, tenants] = await Promise.all([api.rooms(), api.tenants()]);
+  } catch (e) { toast(friendlyError(e), true); }
+  fillStatic();
+  refresh();
+}
+$('loginForm').onsubmit = async e => {
+  e.preventDefault();
+  $('loginErr').textContent = '';
+  try { await api.login($('email').value.trim(), $('password').value); $('password').value = ''; boot(); }
+  catch (err) { $('loginErr').textContent = friendlyError(err); }
+};
+$('logout').onclick = async () => { await api.logout(); showLogin(); };
+
+/* ---------- Tabs ---------- */
+function setTab(cal) {
+  $('tabCal').setAttribute('aria-selected', String(cal));
+  $('tabTen').setAttribute('aria-selected', String(!cal));
+  $('calView').hidden = !cal; $('calView').style.display = cal ? 'contents' : 'none';
+  $('calNav').style.display = cal ? 'contents' : 'none';
+  $('tenSpacer').hidden = cal;
+  $('tenView').hidden = cal;
+  if (!cal) renderTenants();
+}
+$('tabCal').onclick = () => setTab(true);
+$('tabTen').onclick = () => setTab(false);
+
+/* ---------- Calendar ---------- */
+async function refresh() {
+  const start = bpTime(day.y, day.m, day.d);
+  const nd = addDays(day, 1);
+  const end = bpTime(nd.y, nd.m, nd.d);
+  $('title').textContent = titleFmt.format(new Date(start.getTime() + 12 * 3600000));
+  $('pick').value = iso(day);
+  try { bookings = await api.bookings(start, end); }
+  catch (e) { toast(friendlyError(e), true); bookings = []; }
+  build(start, end);
+}
+
+function build(start, end) {
+  const grid = $('grid');
+  grid.innerHTML = '';
+  const row = rowPx();
+  const dayMin = (end - start) / 60000;
+  const slots = Math.round(dayMin / 30);
+
+  const corner = document.createElement('div'); corner.className = 'colhead corner'; grid.appendChild(corner);
+  rooms.forEach(r => { const h = document.createElement('div'); h.className = 'colhead'; h.textContent = r.nev; grid.appendChild(h); });
+
+  const times = document.createElement('div'); times.className = 'times';
+  for (let i = 0; i < slots; i++) {
+    const t = document.createElement('div');
+    const at = new Date(start.getTime() + i * 1800000);
+    t.textContent = i === 0 ? '' : hmFmt.format(at);
+    if (bpParts(at).min !== 0) t.className = 'half';
+    times.appendChild(t);
+  }
+  grid.appendChild(times);
+
+  rooms.forEach(r => {
+    const col = document.createElement('div');
+    col.className = 'col';
+    col.style.height = (slots * row) + 'px';
+    const ghost = document.createElement('div'); ghost.className = 'ghost'; ghost.hidden = true; col.appendChild(ghost);
+    col.addEventListener('mousemove', e => {
+      if (e.target !== col) { ghost.hidden = true; return; }
+      const slot = Math.floor(e.offsetY / row);
+      ghost.hidden = false; ghost.style.top = (slot * row + 1) + 'px';
+      ghost.textContent = hmFmt.format(new Date(start.getTime() + slot * 1800000));
+    });
+    col.addEventListener('mouseleave', () => { ghost.hidden = true; });
+    col.addEventListener('click', e => {
+      if (e.target !== col && e.target !== ghost) return;
+      const slot = Math.floor(e.offsetY / row);
+      const at = new Date(start.getTime() + slot * 1800000);
+      const p = bpParts(at);
+      openBooking(null, { terem_id: r.id, day: { y: p.y, m: p.m, d: p.d }, startMin: p.h * 60 + p.min });
+    });
+
+    bookings.filter(b => b.terem_id === r.id).forEach(b => {
+      const s = Math.max(0, (new Date(b.kezdes) - start) / 60000);
+      const e = Math.min(dayMin, (new Date(b.veg) - start) / 60000);
+      if (e <= s) return;
+      const t = tenantById(b.berlo_id);
+      const el = document.createElement('button');
+      el.type = 'button';
+      el.className = 'b ' + (t && t.nyilvanos ? 'pub' : 'priv') + (b.sorozat_id ? ' series' : '');
+      if (e - s <= 30) el.classList.add('short');
+      el.style.top = (s / 30 * row + 1) + 'px';
+      el.style.height = ((e - s) / 30 * row - 2) + 'px';
+      const range = hmFmt.format(new Date(b.kezdes)) + '–' + hmFmt.format(new Date(b.veg));
+      el.innerHTML = '<strong></strong><span></span>';
+      el.querySelector('strong').textContent = t ? t.nev : 'Bérlő nélkül';
+      el.querySelector('span').textContent = range;
+      el.title = (t ? t.nev : 'Bérlő nélkül') + ', ' + range + (b.megjegyzes ? '\n' + b.megjegyzes : '');
+      el.onclick = ev => { ev.stopPropagation(); openBooking(b); };
+      col.appendChild(el);
+    });
+    grid.appendChild(col);
+  });
+
+  const now = new Date();
+  const headH = grid.querySelector('.colhead').offsetHeight;
+  if (now >= start && now < end) {
+    const line = document.createElement('div'); line.className = 'nowline';
+    line.style.top = (headH + (now - start) / 60000 / 30 * row - 1) + 'px';
+    grid.appendChild(line);
+  }
+  if (!scrolled) {
+    scrolled = true;
+    const target = (now >= start && now < end) ? (now - start) / 60000 - 60 : 7 * 60;
+    $('scroller').scrollTop = Math.max(0, target / 30 * row);
+  }
+}
+
+$('prev').onclick = () => { day = addDays(day, -1); refresh(); };
+$('next').onclick = () => { day = addDays(day, 1); refresh(); };
+$('today').onclick = () => { day = todayBp(); scrolled = false; refresh(); };
+$('pick').onchange = e => { if (e.target.value) { day = parseIso(e.target.value); refresh(); } };
+
+/* ---------- Static selects ---------- */
+function fillStatic() {
+  $('bRoom').innerHTML = rooms.map(r => `<option value="${r.id}">${r.nev}</option>`).join('');
+  let s = ''; for (let m = 0; m < 1440; m += 30) s += `<option value="${m}">${hm(m)}</option>`;
+  $('bStart').innerHTML = s;
+  let d = ''; for (let m = 30; m <= 720; m += 30) d += `<option value="${m}">${durLabel(m)}</option>`;
+  $('bDur').innerHTML = d;
+  fillTenantSelect();
+}
+function fillTenantSelect(selected) {
+  const sel = $('bTenant');
+  const keep = selected !== undefined ? selected : sel.value;
+  sel.innerHTML = '<option value="">– Bérlő nélkül –</option>' +
+    tenants.map(t => `<option value="${t.id}"></option>`).join('');
+  [...sel.options].slice(1).forEach((o, i) => { o.textContent = tenants[i].nev; });
+  sel.value = keep ? String(keep) : '';
+}
+
+/* ---------- Booking dialog ---------- */
+function openBooking(b, preset) {
+  editing = b;
+  $('bErr').textContent = '';
+  $('bRepeat').checked = false; $('bRepeatBox').hidden = true;
+  if (b) {
+    const s = bpParts(new Date(b.kezdes));
+    $('bTitle').textContent = 'Foglalás szerkesztése';
+    $('bRoom').value = b.terem_id;
+    $('bDate').value = iso(s);
+    $('bStart').value = s.h * 60 + s.min;
+    $('bDur').value = Math.round((new Date(b.veg) - new Date(b.kezdes)) / 60000);
+    fillTenantSelect(b.berlo_id || '');
+    $('bNote').value = b.megjegyzes || '';
+    $('bRepeatWrap').hidden = true;
+    $('bDelWrap').hidden = false;
+    $('bDelSeries').hidden = !b.sorozat_id;
+    $('bDelOne').textContent = b.sorozat_id ? 'Csak ezt törlöm' : 'Törlés';
+    $('bMeta').hidden = !b.sorozat_id;
+    $('bMeta').textContent = b.sorozat_id ? 'Ez egy ismétlődő sorozat egyik alkalma. A módosítás csak erre az alkalomra vonatkozik.' : '';
+  } else {
+    $('bTitle').textContent = 'Új foglalás';
+    $('bRoom').value = preset.terem_id;
+    $('bDate').value = iso(preset.day);
+    $('bStart').value = preset.startMin;
+    $('bDur').value = 60;
+    fillTenantSelect('');
+    $('bNote').value = '';
+    $('bRepeatWrap').hidden = false;
+    $('bDelWrap').hidden = true;
+    $('bMeta').hidden = true;
+    $('bUntil').value = iso(addDays(preset.day, 7 * 12));
+  }
+  updateRepeatInfo();
+  $('bDlg').showModal();
+}
+function updateRepeatInfo() {
+  if (!$('bDate').value || !$('bUntil').value) { $('bRepeatInfo').textContent = ''; return; }
+  const d = parseIso($('bDate').value), u = parseIso($('bUntil').value);
+  const n = Math.floor((Date.UTC(u.y, u.m, u.d) - Date.UTC(d.y, d.m, d.d)) / (7 * 86400000)) + 1;
+  $('bRepeatInfo').textContent = n > 0
+    ? `Minden ${DOW[isoDow(d)]}, ${hm(+$('bStart').value)}-tól, összesen ${n} alkalom.`
+    : 'Az utolsó alkalom nem lehet a kezdőnap előtt.';
+}
+['bDate', 'bUntil', 'bStart'].forEach(id => $(id).addEventListener('change', updateRepeatInfo));
+$('bRepeat').onchange = () => { $('bRepeatBox').hidden = !$('bRepeat').checked; updateRepeatInfo(); };
+$('bCancel').onclick = () => $('bDlg').close();
+
+$('bForm').onsubmit = async e => {
+  e.preventDefault();
+  $('bErr').textContent = '';
+  if (!$('bDate').value) { $('bErr').textContent = 'Adj meg egy napot.'; return; }
+  const d = parseIso($('bDate').value);
+  const startMin = +$('bStart').value, dur = +$('bDur').value;
+  const kezdes = bpTime(d.y, d.m, d.d, Math.floor(startMin / 60), startMin % 60);
+  const veg = new Date(kezdes.getTime() + dur * 60000);
+  const rec = {
+    terem_id: +$('bRoom').value,
+    berlo_id: $('bTenant').value ? +$('bTenant').value : null,
+    kezdes: kezdes.toISOString(), veg: veg.toISOString(),
+    megjegyzes: $('bNote').value.trim() || null,
+  };
+  $('bSave').disabled = true;
+  try {
+    if (editing) {
+      await api.updateBooking(editing.id, rec);
+      toast('Foglalás mentve');
+    } else if ($('bRepeat').checked) {
+      if (!$('bUntil').value || $('bUntil').value < $('bDate').value) {
+        $('bErr').textContent = 'Az utolsó alkalom nem lehet a kezdőnap előtt.'; return;
+      }
+      await api.addSeries({
+        p_terem_id: rec.terem_id, p_berlo_id: rec.berlo_id, p_het_napja: isoDow(d),
+        p_kezdes_ido: hm(startMin), p_hossz_perc: dur,
+        p_ervenyes_tol: $('bDate').value, p_ervenyes_ig: $('bUntil').value, p_megjegyzes: rec.megjegyzes,
+      });
+      toast('Sorozat mentve');
+    } else {
+      await api.addBooking(rec);
+      toast('Foglalás mentve');
+    }
+    $('bDlg').close();
+    day = d;
+    refresh();
+  } catch (err) {
+    $('bErr').textContent = friendlyError(err);
+  } finally {
+    $('bSave').disabled = false;
+  }
+};
+
+$('bDelOne').onclick = async () => {
+  if (!editing) return;
+  if (!confirm('Biztosan törlöd ezt a foglalást?')) return;
+  try { await api.deleteBooking(editing.id); $('bDlg').close(); toast('Foglalás törölve'); refresh(); }
+  catch (err) { $('bErr').textContent = friendlyError(err); }
+};
+$('bDelSeries').onclick = async () => {
+  if (!editing || !editing.sorozat_id) return;
+  const when = shortDateFmt.format(new Date(editing.kezdes));
+  if (!confirm(`Törlöd ezt (${when}) és a sorozat összes későbbi alkalmát? A korábbi alkalmak megmaradnak.`)) return;
+  try { await api.deleteSeriesFrom(editing.sorozat_id, editing.kezdes); $('bDlg').close(); toast('Sorozat törölve ettől a naptól'); refresh(); }
+  catch (err) { $('bErr').textContent = friendlyError(err); }
+};
+
+$('bNewTenant').onclick = e => {
+  e.preventDefault();
+  tenantReturnToBooking = true;
+  openTenant(null);
+};
+
+/* ---------- Tenants ---------- */
+function renderTenants() {
+  const q = $('tenSearch').value.trim().toLowerCase();
+  const list = tenants.filter(t => !q || t.nev.toLowerCase().includes(q) || (t.megjeleno_nev || '').toLowerCase().includes(q));
+  const body = $('tenRows');
+  body.innerHTML = '';
+  if (!list.length) {
+    body.innerHTML = `<tr><td colspan="3" class="empty">${tenants.length ? 'Nincs találat.' : 'Vedd fel az első bérlőt az Új bérlő gombbal.'}</td></tr>`;
+    return;
+  }
+  list.forEach(t => {
+    const tr = document.createElement('tr');
+    tr.tabIndex = 0;
+    tr.innerHTML = '<td></td><td></td><td></td>';
+    tr.children[0].textContent = t.nev;
+    const pill = document.createElement('span');
+    pill.className = 'pill' + (t.nyilvanos ? ' on' : '');
+    pill.textContent = t.nyilvanos ? (t.megjeleno_nev || t.nev) + (t.link ? ' + link' : '') : 'Foglalt';
+    tr.children[1].appendChild(pill);
+    tr.children[2].textContent = t.elerhetoseg || '';
+    tr.onclick = () => { tenantReturnToBooking = false; openTenant(t); };
+    tr.onkeydown = e => { if (e.key === 'Enter') tr.onclick(); };
+    body.appendChild(tr);
+  });
+}
+$('tenSearch').oninput = renderTenants;
+$('newTenant').onclick = () => { tenantReturnToBooking = false; openTenant(null); };
+
+function openTenant(t) {
+  tenantEditing = t ? t.id : null;
+  $('tTitle').textContent = t ? 'Bérlő szerkesztése' : 'Új bérlő';
+  $('tName').value = t ? t.nev : '';
+  $('tPublic').checked = t ? t.nyilvanos : false;
+  $('tDisplay').value = t ? (t.megjeleno_nev || '') : '';
+  $('tLink').value = t ? (t.link || '') : '';
+  $('tContact').value = t ? (t.elerhetoseg || '') : '';
+  $('tNote').value = t ? (t.megjegyzes || '') : '';
+  $('tErr').textContent = '';
+  $('tPubBox').hidden = !$('tPublic').checked;
+  $('tDlg').showModal();
+  $('tName').focus();
+}
+$('tPublic').onchange = () => { $('tPubBox').hidden = !$('tPublic').checked; };
+$('tCancel').onclick = () => $('tDlg').close();
+$('tForm').onsubmit = async e => {
+  e.preventDefault();
+  $('tErr').textContent = '';
+  const name = $('tName').value.trim();
+  if (!name) { $('tErr').textContent = 'Adj meg egy nevet.'; return; }
+  let link = $('tLink').value.trim() || null;
+  if (link && !/^https?:\/\//i.test(link)) link = 'https://' + link;
+  const rec = {
+    nev: name,
+    nyilvanos: $('tPublic').checked,
+    megjeleno_nev: $('tDisplay').value.trim() || null,
+    link,
+    elerhetoseg: $('tContact').value.trim() || null,
+    megjegyzes: $('tNote').value.trim() || null,
+  };
+  try {
+    const saved = await api.saveTenant(tenantEditing, rec);
+    tenants = await api.tenants();
+    $('tDlg').close();
+    toast('Bérlő mentve');
+    renderTenants();
+    if (tenantReturnToBooking) fillTenantSelect(saved.id);
+    else fillTenantSelect();
+    refresh();
+  } catch (err) { $('tErr').textContent = friendlyError(err); }
+};
+
+/* ---------- Start ---------- */
+document.addEventListener('visibilitychange', () => { if (!document.hidden && !$('appView').hidden && !$('bDlg').open) refresh(); });
+setInterval(() => { if (!document.hidden && !$('appView').hidden && !$('bDlg').open && !$('tDlg').open) refresh(); }, 60000);
+boot();
+</script>
+</body>
+</html>
