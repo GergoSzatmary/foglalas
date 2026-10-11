@@ -1,0 +1,9 @@
+{
+  "name": "foglalas",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@supabase/supabase-js": "2.117.2",
+    "node-ical": "0.27.1"
+  }
+}
