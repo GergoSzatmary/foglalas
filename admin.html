@@ -298,11 +298,11 @@ dialog h2 { font-family: var(--head); font-weight: 600; font-size: 22px; margin:
           <small id="bRepeatInfo"></small></label>
       </div>
     </div>
+    <label class="check" id="bSeriesWrap" hidden><input type="checkbox" id="bSeriesAll"> Ez és a későbbi alkalmak is (mentés és törlés)</label>
     <p class="err" id="bErr"></p>
     <div class="actions">
       <span class="left" id="bDelWrap" hidden>
         <button type="button" class="btn danger" id="bDelOne">Törlés</button>
-        <button type="button" class="btn danger" id="bDelSeries" hidden>Ezt és a későbbieket törlöm</button>
       </span>
       <button type="button" class="btn" id="bCancel">Mégse</button>
       <button type="submit" class="btn primary" id="bSave">Mentés</button>
@@ -422,6 +422,7 @@ if (!DEMO) {
       chk(await db.from('foglalasok').delete().eq('sorozat_id', seriesId).gte('kezdes', fromIso));
     },
     async addSeries(p) { return chk(await db.rpc('sorozat_letrehozasa', p)); },
+    async updateSeriesFrom(p) { return chk(await db.rpc('sorozat_modositasa', p)); },
     async saveTenant(id, t) {
       if (id) return chk(await db.from('berlok').update(t).eq('id', id).select().single());
       return chk(await db.from('berlok').insert(t).select().single());
@@ -464,6 +465,21 @@ if (!DEMO) {
     async updateBooking(id, b) { await wait(); if (overlap(b, id)) throw conflictErr(); Object.assign(mem.bookings.find(x => x.id === id), b); },
     async deleteBooking(id) { mem.bookings = mem.bookings.filter(b => b.id !== id); },
     async deleteSeriesFrom(sid, from) { mem.bookings = mem.bookings.filter(b => !(b.sorozat_id === sid && b.kezdes >= from)); },
+    async updateSeriesFrom(p) {
+      await wait();
+      const f = mem.bookings.find(b => b.id === p.p_foglalas_id);
+      const old = bpParts(new Date(f.kezdes)), nd = parseIso(p.p_datum);
+      const shift = Math.round((Date.UTC(nd.y, nd.m, nd.d) - Date.UTC(old.y, old.m, old.d)) / 86400000);
+      if (Math.abs(shift) > 6) throw new Error('Sorozatnál a nap legfeljebb 6 nappal tolható el (másik hétre ne tedd át).');
+      const [h, mi] = p.p_kezdes_ido.split(':').map(Number);
+      const hit = mem.bookings.filter(b => b.sorozat_id === f.sorozat_id && b.kezdes >= f.kezdes);
+      const next = hit.map(b => { const q = bpParts(new Date(b.kezdes)); const d = addDays(q, shift); const k = bpTime(d.y, d.m, d.d, h, mi);
+        return { b, terem_id: p.p_terem_id, berlo_id: p.p_berlo_id, kezdes: k.toISOString(), veg: new Date(k.getTime() + p.p_hossz_perc * 60000).toISOString(), megjegyzes: p.p_megjegyzes }; });
+      for (const n of next) if (mem.bookings.some(o => !hit.includes(o) && o.terem_id === n.terem_id && o.kezdes < n.veg && o.veg > n.kezdes))
+        throw new Error(`Ütközés: Terem ${n.terem_id} már foglalt ekkor: ${iso(bpParts(new Date(n.kezdes))).replace(/-/g, '.')}. ${p.p_kezdes_ido}. Semmi nem változott.`);
+      next.forEach(n => { const { b, ...r } = n; Object.assign(b, r); });
+      return next.length;
+    },
     async addSeries(p) {
       await wait();
       const sid = mem.sseq++, add = [];
@@ -806,12 +822,12 @@ function openBooking(b, preset) {
     $('bNote').value = b.megjegyzes || '';
     $('bRepeatWrap').hidden = true;
     $('bDelWrap').hidden = false;
-    $('bDelSeries').hidden = !b.sorozat_id;
-    $('bDelOne').textContent = b.sorozat_id ? 'Csak ezt törlöm' : 'Törlés';
+    $('bSeriesWrap').hidden = !b.sorozat_id;
+    $('bSeriesAll').checked = false;
     $('bMeta').hidden = !b.sorozat_id && b.forras !== 'gcal-maszk';
     $('bMeta').textContent = b.forras === 'gcal-maszk'
       ? 'Ez a Maszk Google-naptárából jött. Ha itt módosítod vagy törlöd, a következő szinkron visszaállíthatja – a változást inkább a Google-naptárban kérd.'
-      : (b.sorozat_id ? 'Ez egy ismétlődő sorozat egyik alkalma. A módosítás csak erre az alkalomra vonatkozik.' : '');
+      : (b.sorozat_id ? 'Ez egy ismétlődő sorozat egyik alkalma. Alapból csak erre az alkalomra vonatkozik a mentés és a törlés. Ha bejelölöd lent a „későbbi alkalmak is” négyzetet, az összes későbbire is (a korábbiak változatlanok maradnak).' : '');
   } else {
     $('bTitle').textContent = 'Új foglalás';
     $('bRoom').value = preset.terem_id;
@@ -822,6 +838,8 @@ function openBooking(b, preset) {
     $('bNote').value = '';
     $('bRepeatWrap').hidden = false;
     $('bDelWrap').hidden = true;
+    $('bSeriesWrap').hidden = true;
+    $('bSeriesAll').checked = false;
     $('bMeta').hidden = true;
     $('bUntil').value = iso(addDays(preset.day, 7 * 12));
   }
@@ -854,9 +872,17 @@ $('bForm').onsubmit = async e => {
     kezdes: kezdes.toISOString(), veg: veg.toISOString(),
     megjegyzes: $('bNote').value.trim() || null,
   };
+  const toSeries = !!(editing && editing.sorozat_id && $('bSeriesAll').checked);
+  if (toSeries && !confirm(`Ezt (${shortDateFmt.format(new Date(editing.kezdes))}) és a sorozat összes későbbi alkalmát átírod? A korábbi alkalmak változatlanok maradnak.`)) return;
   $('bSave').disabled = true;
   try {
-    if (editing) {
+    if (toSeries) {
+      const n = await api.updateSeriesFrom({
+        p_foglalas_id: editing.id, p_terem_id: rec.terem_id, p_berlo_id: rec.berlo_id,
+        p_datum: $('bDate').value, p_kezdes_ido: hm(startMin), p_hossz_perc: dur, p_megjegyzes: rec.megjegyzes,
+      });
+      toast(`${n} alkalom módosítva`);
+    } else if (editing) {
       await api.updateBooking(editing.id, rec);
       toast('Foglalás mentve');
     } else if ($('bRepeat').checked) {
@@ -886,17 +912,18 @@ $('bForm').onsubmit = async e => {
 
 $('bDelOne').onclick = async () => {
   if (!editing) return;
+  if (editing.sorozat_id && $('bSeriesAll').checked) return deleteSeries();
   if (!confirm('Biztosan törlöd ezt a foglalást?')) return;
   try { await api.deleteBooking(editing.id); $('bDlg').close(); toast('Foglalás törölve'); refresh(); }
   catch (err) { $('bErr').textContent = friendlyError(err); }
 };
-$('bDelSeries').onclick = async () => {
+async function deleteSeries() {
   if (!editing || !editing.sorozat_id) return;
   const when = shortDateFmt.format(new Date(editing.kezdes));
   if (!confirm(`Törlöd ezt (${when}) és a sorozat összes későbbi alkalmát? A korábbi alkalmak megmaradnak.`)) return;
   try { await api.deleteSeriesFrom(editing.sorozat_id, editing.kezdes); $('bDlg').close(); toast('Sorozat törölve ettől a naptól'); refresh(); }
   catch (err) { $('bErr').textContent = friendlyError(err); }
-};
+}
 
 $('bNewTenant').onclick = e => {
   e.preventDefault();
