@@ -104,9 +104,25 @@ textarea.in { height: 64px; padding: 8px 10px; resize: vertical; }
 
 /* Calendar */
 .scroller { flex: 1; overflow: auto; position: relative; }
-.grid { display: grid; position: relative; grid-template-columns: var(--timecol) repeat(7, minmax(110px, 1fr)); }
-.colhead {
+.grid { display: grid; position: relative; grid-template-columns: var(--timecol) repeat(var(--cols, 7), minmax(var(--colmin, 110px), 1fr)); }
+.grid.week { --colmin: 0px; }
+.grouphead {
   position: sticky; top: 0; z-index: 3; background: var(--paper);
+  height: var(--gh); line-height: var(--gh); text-align: center;
+  font-size: 13px; font-weight: 500; color: var(--ink-soft);
+  border-bottom: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.grouphead.corner { left: 0; z-index: 4; }
+.grouphead:not(.corner) + .grouphead { border-left: 2px solid var(--line-hour); }
+.colhead.loc-start, .col.loc-start { border-left: 2px solid var(--line-hour); }
+.colhead.today { color: var(--now); }
+button.colhead {
+  appearance: none; display: block; width: 100%; height: 100%; margin: 0; border: 0; border-radius: 0;
+  border-bottom: 1px solid var(--line-hour); cursor: pointer; line-height: 1.4;
+}
+button.colhead:hover { background: var(--free); }
+.colhead {
+  position: sticky; top: var(--gh, 0px); z-index: 3; background: var(--paper);
   border-bottom: 1px solid var(--line-hour);
   font-family: var(--head); font-weight: 600; font-size: 17px; text-align: center; padding: 8px 2px;
 }
@@ -144,7 +160,26 @@ textarea.in { height: 64px; padding: 8px 10px; resize: vertical; }
 .b:hover { filter: brightness(1.08); }
 .b.short span { display: none; }
 .b.tiny { padding: 0 6px; font-size: 11px; line-height: 1; }
-.nowline { position: absolute; left: var(--timecol); right: 0; height: 2px; background: var(--now); z-index: 1; pointer-events: none; }
+.nowline { position: absolute; left: 0; right: 0; height: 2px; background: var(--now); z-index: 1; pointer-events: none; }
+
+/* View switch + room chips */
+.seg { display: inline-flex; border: 1px solid var(--line-hour); border-radius: 6px; padding: 2px; flex: none; }
+.seg button {
+  height: 30px; padding: 0 12px; border: 0; border-radius: 4px; background: none; cursor: pointer;
+  font-weight: 500; color: var(--ink-soft);
+}
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.rooms { display: none; gap: 10px 20px; padding: 8px 16px 10px; border-bottom: 1px solid var(--line); flex-wrap: wrap; align-items: flex-end; }
+body.show-rooms .rooms { display: flex; }
+.rgroup { display: flex; flex-direction: column; gap: 4px; }
+.rlabel { font-size: 12px; font-weight: 500; color: var(--ink-soft); }
+.rchips { display: flex; gap: 6px; }
+.rchips button {
+  flex: none; height: 34px; min-width: 44px; padding: 0 12px; border-radius: 17px;
+  border: 1px solid var(--line-hour); background: var(--paper); cursor: pointer;
+  font-family: var(--head); font-weight: 600; font-size: 16px;
+}
+.rchips button[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
 
 /* Tenants */
 .tenants { flex: 1; overflow: auto; padding: 16px; }
@@ -173,6 +208,14 @@ dialog h2 { font-family: var(--head); font-weight: 600; font-size: 22px; margin:
 
 @media (max-width: 640px) {
   .bar h1 { font-size: 18px; order: 5; width: 100%; margin: 4px 0 0; }
+  #pick { display: none; }
+  .hint { display: none; }
+  .grid.week { --timecol: 40px; }
+  .grid.week .colhead { font-size: 14px; padding: 8px 0; }
+  .grid.week .b { left: 1px; right: 1px; padding: 2px 3px; font-size: 11px; }
+  .grid.week .b span { display: none; }
+  .grid.week .b.series::after, .grid.week .b.gcal::before { display: none; }
+  .grid.week .times div { font-size: 12px; padding-right: 4px; }
   .row2 { grid-template-columns: 1fr; gap: 0; }
 }
 </style>
@@ -199,6 +242,10 @@ dialog h2 { font-family: var(--head); font-weight: 600; font-size: 22px; margin:
       <button class="btn icon" id="prev" aria-label="Előző nap"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></button>
       <button class="btn icon" id="next" aria-label="Következő nap"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></button>
       <h1 id="title"></h1>
+      <div class="seg" role="group" aria-label="Nézet">
+        <button id="vDay" aria-pressed="true">Nap</button>
+        <button id="vWeek" aria-pressed="false">Hét</button>
+      </div>
       <input type="date" class="in" id="pick" style="width:auto" aria-label="Dátum választása">
       <button class="btn" id="today">Ma</button>
     </span>
@@ -207,6 +254,7 @@ dialog h2 { font-family: var(--head); font-weight: 600; font-size: 22px; margin:
   </header>
 
   <section id="calView" style="display:contents">
+    <nav class="rooms" id="rooms" aria-label="Terem választása"></nav>
     <div class="sync" id="syncBar">
       <span id="syncInfo">Maszk Google-naptár: betöltés…</span>
       <button class="btn" id="syncNow">Szinkronizálás most</button>
@@ -361,7 +409,7 @@ if (!DEMO) {
       if (!r.ok) throw new Error(j.hiba || ('A szinkron nem futott le (HTTP ' + r.status + ').'));
       return j;
     },
-    async rooms() { return chk(await db.from('termek').select('id, nev, sorrend').order('sorrend')); },
+    async rooms() { return chk(await db.from('termek').select('*').order('sorrend')); },
     async tenants() { return chk(await db.from('berlok').select('*').order('nev')); },
     async bookings(start, end) {
       return chk(await db.from('foglalasok').select('*')
@@ -409,7 +457,7 @@ if (!DEMO) {
       mem.lastSync = { futott: new Date().toISOString(), uj: 2, torolt: 0, esemenyek: 21, utkozesek: [], hiba: null, inditotta: 'admin' };
       return { ok: true, uj: 2, torolt: 0, esemenyek: 21, utkozesek: [] };
     },
-    async rooms() { return [1,2,3,4,5,6,7].map(i => ({ id: i, nev: 'Terem ' + i, sorrend: i })); },
+    async rooms() { return [1,2,3,4,5,6,7].map(i => ({ id: i, nev: 'Terem ' + i, sorrend: i, helyszin: i < 5 ? 'Mikepércsi út 10' : 'Déli sor 29' })); },
     async tenants() { return [...mem.tenants].sort((a, b) => a.nev.localeCompare(b.nev, 'hu')); },
     async bookings(s, e) { await wait(); return mem.bookings.filter(b => new Date(b.kezdes) < e && new Date(b.veg) > s); },
     async addBooking(b) { await wait(); if (overlap(b)) throw conflictErr(); mem.bookings.push({ id: mem.seq++, sorozat_id: null, ...b }); },
@@ -446,7 +494,10 @@ if (!DEMO) {
 /* ---------- State ---------- */
 let rooms = [], tenants = [], bookings = [];
 let day = todayBp();
+let view = 'day';
+let selectedRoom = null;
 let scrolled = false;
+const mobile = window.matchMedia('(max-width: 640px)');
 let editing = null;          // booking being edited, or null for new
 let tenantEditing = null;    // tenant id or null
 let tenantReturnToBooking = false;
@@ -480,6 +531,8 @@ async function showApp() {
   try {
     [rooms, tenants] = await Promise.all([api.rooms(), api.tenants()]);
   } catch (e) { toast(friendlyError(e), true); }
+  if (!rooms.some(r => r.id === selectedRoom)) selectedRoom = rooms[0] && rooms[0].id;
+  renderRoomChips();
   fillStatic();
   showSync();
   refresh();
@@ -506,61 +559,178 @@ $('tabCal').onclick = () => setTab(true);
 $('tabTen').onclick = () => setTab(false);
 
 /* ---------- Calendar ---------- */
-async function refresh() {
-  const start = bpTime(day.y, day.m, day.d);
-  const nd = addDays(day, 1);
-  const end = bpTime(nd.y, nd.m, nd.d);
-  $('title').textContent = titleFmt.format(new Date(start.getTime() + 12 * 3600000));
-  $('pick').value = iso(day);
-  try { bookings = await api.bookings(start, end); }
-  catch (e) { toast(friendlyError(e), true); bookings = []; }
-  build(start, end);
+const wdFmt = new Intl.DateTimeFormat('hu-HU', { timeZone: TZ, weekday: 'short' });
+const monthDayFmt = new Intl.DateTimeFormat('hu-HU', { timeZone: TZ, month: 'long', day: 'numeric' });
+const monthDayShortFmt = new Intl.DateTimeFormat('hu-HU', { timeZone: TZ, month: 'short', day: 'numeric' });
+const dayShortFmt = new Intl.DateTimeFormat('hu-HU', { timeZone: TZ, month: 'short', day: 'numeric', weekday: 'short' });
+const weekStart = d => addDays(d, 1 - isoDow(d));
+const sameDay = (a, b) => a.y === b.y && a.m === b.m && a.d === b.d;
+const noon = d => new Date(bpTime(d.y, d.m, d.d).getTime() + 12 * 3600000);
+const dayBounds = d => { const n = addDays(d, 1); return [bpTime(d.y, d.m, d.d), bpTime(n.y, n.m, n.d)]; };
+
+function renderRoomChips() {
+  const nav = $('rooms');
+  nav.innerHTML = '';
+  let chips = null;
+  rooms.forEach((r, i) => {
+    if (i === 0 || r.helyszin !== rooms[i - 1].helyszin) {
+      const g = document.createElement('div'); g.className = 'rgroup';
+      const l = document.createElement('span'); l.className = 'rlabel';
+      l.textContent = r.helyszin ? 'Termek: ' + r.helyszin : 'Termek';
+      chips = document.createElement('div'); chips.className = 'rchips';
+      g.append(l, chips); nav.appendChild(g);
+    }
+    const b = document.createElement('button');
+    b.textContent = mobile.matches ? (r.nev.replace(/^Terem\s*/i, '') || r.nev) : r.nev;
+    b.setAttribute('aria-label', r.nev + (r.helyszin ? ', ' + r.helyszin : ''));
+    b.setAttribute('aria-pressed', String(r.id === selectedRoom));
+    b.onclick = () => { selectedRoom = r.id; renderRoomChips(); refresh(); };
+    chips.appendChild(b);
+  });
 }
 
-function build(start, end) {
+function setView(v) {
+  view = v;
+  $('vDay').setAttribute('aria-pressed', String(v === 'day'));
+  $('vWeek').setAttribute('aria-pressed', String(v === 'week'));
+  $('prev').setAttribute('aria-label', v === 'day' ? 'Előző nap' : 'Előző hét');
+  $('next').setAttribute('aria-label', v === 'day' ? 'Következő nap' : 'Következő hét');
+  refresh();
+}
+$('vDay').onclick = () => setView('day');
+$('vWeek').onclick = () => setView('week');
+
+function weekTitle(ws) {
+  const we = addDays(ws, 6);
+  const f = mobile.matches ? monthDayShortFmt : monthDayFmt;
+  const first = f.format(noon(ws)).replace(/\.$/, '');
+  if (ws.m === we.m) return `${first}–${we.d}.`;
+  return `${first} – ${f.format(noon(we))}`;
+}
+
+/* local-clock minutes of t within the local day [ds, de), clamped */
+function minutesIn(t, ds, de) {
+  if (t <= ds) return 0;
+  if (t >= de) return 1440;
+  const p = bpParts(t);
+  return p.h * 60 + p.min;
+}
+
+let reqId = 0;
+async function refresh() {
+  const my = ++reqId;
+  document.body.classList.toggle('show-rooms', view === 'week' || mobile.matches);
+  let start, end, cols, groups;
+  const tday = todayBp();
+  if (view === 'day') {
+    [start, end] = dayBounds(day);
+    $('title').textContent = (mobile.matches ? dayShortFmt : titleFmt).format(noon(day));
+    const visible = mobile.matches ? rooms.filter(r => r.id === selectedRoom) : rooms;
+    cols = visible.map((r, i) => ({
+      label: r.nev, title: r.nev + (r.helyszin ? ', ' + r.helyszin : ''),
+      locStart: i > 0 && r.helyszin !== visible[i - 1].helyszin,
+      roomId: r.id, d: day, today: sameDay(day, tday),
+    }));
+    groups = [];
+    visible.forEach((r, i) => {
+      if (i > 0 && r.helyszin === visible[i - 1].helyszin) groups[groups.length - 1].span++;
+      else groups.push({ label: r.helyszin, span: 1 });
+    });
+  } else {
+    const ws = weekStart(day);
+    start = dayBounds(ws)[0];
+    end = dayBounds(addDays(ws, 6))[1];
+    $('title').textContent = weekTitle(ws);
+    const room = rooms.find(r => r.id === selectedRoom) || rooms[0];
+    cols = [];
+    for (let k = 0; k < 7; k++) {
+      const d = addDays(ws, k);
+      const wd = wdFmt.format(noon(d)).replace('.', '');
+      cols.push({
+        label: `${wd.charAt(0).toUpperCase() + wd.slice(1)} ${d.d}.`,
+        title: titleFmt.format(noon(d)) + ' – megnyitás napi nézetben',
+        onHead: () => { day = d; setView('day'); },
+        roomId: room.id, d, today: sameDay(d, tday),
+      });
+    }
+    groups = [{ label: room.nev + (room.helyszin ? ', ' + room.helyszin : ''), span: 7 }];
+  }
+  $('pick').value = iso(day);
+  let list;
+  try { list = await api.bookings(start, end); }
+  catch (e) { if (my !== reqId) return; toast(friendlyError(e), true); list = []; }
+  if (my !== reqId) return;
+  bookings = list;
+  cols.forEach(c => {
+    [c.ds, c.de] = dayBounds(c.d);
+    c.bookings = bookings.filter(b => b.terem_id === c.roomId && new Date(b.veg) > c.ds && new Date(b.kezdes) < c.de);
+  });
+  build(cols, groups);
+}
+
+function build(cols, groups) {
   const grid = $('grid');
+  grid.classList.toggle('week', view === 'week');
+  grid.style.setProperty('--cols', cols.length);
   grid.innerHTML = '';
   const row = rowPx();
-  const dayMin = (end - start) / 60000;
-  const slots = Math.round(dayMin / 30);
+  const slots = 48;
 
+  const hasGroups = groups.some(g => g.label);
+  grid.style.setProperty('--gh', hasGroups ? '28px' : '0px');
+  if (hasGroups) {
+    const gc = document.createElement('div'); gc.className = 'grouphead corner'; grid.appendChild(gc);
+    groups.forEach(g => {
+      const el = document.createElement('div');
+      el.className = 'grouphead';
+      el.style.gridColumn = 'span ' + g.span;
+      el.textContent = g.label || '';
+      grid.appendChild(el);
+    });
+  }
   const corner = document.createElement('div'); corner.className = 'colhead corner'; grid.appendChild(corner);
-  rooms.forEach(r => { const h = document.createElement('div'); h.className = 'colhead'; h.textContent = r.nev; grid.appendChild(h); });
-
+  cols.forEach(c => {
+    const h = document.createElement(c.onHead ? 'button' : 'div');
+    h.className = 'colhead' + (c.locStart ? ' loc-start' : '') + (c.today && view === 'week' ? ' today' : '');
+    h.textContent = c.label;
+    if (c.title) h.title = c.title;
+    if (c.onHead) { h.type = 'button'; h.onclick = c.onHead; }
+    grid.appendChild(h);
+  });
   grid.style.setProperty('--hh', grid.querySelector('.colhead:not(.corner)').offsetHeight + 'px');
+
   const times = document.createElement('div'); times.className = 'times';
   for (let i = 0; i < slots; i++) {
     const t = document.createElement('div');
-    const at = new Date(start.getTime() + i * 1800000);
-    t.textContent = i === 0 ? '' : hmFmt.format(at);
-    if (bpParts(at).min !== 0) t.className = 'half';
+    t.textContent = i === 0 ? '' : hm(i * 30);
+    if (i % 2) t.className = 'half';
     times.appendChild(t);
   }
   grid.appendChild(times);
 
-  rooms.forEach(r => {
+  const now = new Date();
+  cols.forEach(c => {
     const col = document.createElement('div');
-    col.className = 'col';
+    col.className = 'col' + (c.locStart ? ' loc-start' : '');
     col.style.height = (slots * row) + 'px';
     const ghost = document.createElement('div'); ghost.className = 'ghost'; ghost.hidden = true; col.appendChild(ghost);
+    const slotAt = e => Math.max(0, Math.min(slots - 1, Math.floor(e.offsetY / row)));
     col.addEventListener('mousemove', e => {
       if (e.target !== col) { ghost.hidden = true; return; }
-      const slot = Math.floor(e.offsetY / row);
+      const slot = slotAt(e);
       ghost.hidden = false; ghost.style.top = (slot * row + 1) + 'px';
-      ghost.textContent = hmFmt.format(new Date(start.getTime() + slot * 1800000));
+      ghost.textContent = hm(slot * 30);
     });
     col.addEventListener('mouseleave', () => { ghost.hidden = true; });
     col.addEventListener('click', e => {
       if (e.target !== col && e.target !== ghost) return;
-      const slot = Math.floor(e.offsetY / row);
-      const at = new Date(start.getTime() + slot * 1800000);
-      const p = bpParts(at);
-      openBooking(null, { terem_id: r.id, day: { y: p.y, m: p.m, d: p.d }, startMin: p.h * 60 + p.min });
+      openBooking(null, { terem_id: c.roomId, day: c.d, startMin: slotAt(e) * 30 });
     });
 
-    bookings.filter(b => b.terem_id === r.id).forEach(b => {
-      const s = Math.max(0, (new Date(b.kezdes) - start) / 60000);
-      const e = Math.min(dayMin, (new Date(b.veg) - start) / 60000);
+    c.bookings.forEach(b => {
+      const k = new Date(b.kezdes), v = new Date(b.veg);
+      const s = minutesIn(k, c.ds, c.de);
+      const e = minutesIn(v, c.ds, c.de);
       if (e <= s) return;
       const t = tenantById(b.berlo_id);
       const el = document.createElement('button');
@@ -570,7 +740,7 @@ function build(start, end) {
       if (e - s < 30) el.classList.add('tiny');
       el.style.top = (s / 30 * row + 1) + 'px';
       el.style.height = ((e - s) / 30 * row - 2) + 'px';
-      const range = (s === 0 && e === dayMin) ? 'Egész nap' : hmFmt.format(new Date(b.kezdes)) + '–' + hmFmt.format(new Date(b.veg));
+      const range = (s === 0 && e === 1440) ? 'Egész nap' : hmFmt.format(k) + '–' + hmFmt.format(v);
       el.innerHTML = '<div class="lbl"><strong></strong><span></span></div>';
       el.querySelector('strong').textContent = t ? t.nev : 'Bérlő nélkül';
       el.querySelector('span').textContent = range;
@@ -578,27 +748,29 @@ function build(start, end) {
       el.onclick = ev => { ev.stopPropagation(); openBooking(b); };
       col.appendChild(el);
     });
+    if (now >= c.ds && now < c.de) {
+      const line = document.createElement('div'); line.className = 'nowline';
+      const p = bpParts(now);
+      line.style.top = ((p.h * 60 + p.min) / 30 * row - 1) + 'px';
+      col.appendChild(line);
+    }
     grid.appendChild(col);
   });
 
-  const now = new Date();
-  const headH = grid.querySelector('.colhead').offsetHeight;
-  if (now >= start && now < end) {
-    const line = document.createElement('div'); line.className = 'nowline';
-    line.style.top = (headH + (now - start) / 60000 / 30 * row - 1) + 'px';
-    grid.appendChild(line);
-  }
   if (!scrolled) {
     scrolled = true;
-    const target = (now >= start && now < end) ? (now - start) / 60000 - 60 : 7 * 60;
+    const p = bpParts(now);
+    const target = sameDay(day, todayBp()) ? p.h * 60 + p.min - 60 : 7 * 60;
     $('scroller').scrollTop = Math.max(0, target / 30 * row);
   }
 }
 
-$('prev').onclick = () => { day = addDays(day, -1); refresh(); };
-$('next').onclick = () => { day = addDays(day, 1); refresh(); };
+function go(n) { day = addDays(day, view === 'day' ? n : 7 * n); refresh(); }
+$('prev').onclick = () => go(-1);
+$('next').onclick = () => go(1);
 $('today').onclick = () => { day = todayBp(); scrolled = false; refresh(); };
 $('pick').onchange = e => { if (e.target.value) { day = parseIso(e.target.value); refresh(); } };
+mobile.addEventListener('change', () => { renderRoomChips(); refresh(); });
 
 /* ---------- Static selects ---------- */
 function fillStatic() {
@@ -703,6 +875,7 @@ $('bForm').onsubmit = async e => {
     }
     $('bDlg').close();
     day = d;
+    if ((view === 'week' || mobile.matches) && rec.terem_id !== selectedRoom) { selectedRoom = rec.terem_id; renderRoomChips(); }
     refresh();
   } catch (err) {
     $('bErr').textContent = friendlyError(err);
