@@ -6,41 +6,54 @@
 <title>Terem foglaltság</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:opsz,wght@6..12,300;6..12,400;6..12,700&display=swap" rel="stylesheet">
 <style>
 :root {
+  /* Turn arculati kézikönyv */
+  --turn-sun: #FCF390;      /* citromsárga */
+  --turn-slate: #4A4C67;    /* sötét pala – fő szövegszín */
+  --turn-mint: #67F1C8;     /* menta */
+  --turn-lilac: #7A7BA6;    /* menü */
+  --turn-green: #54BF9D;    /* menü kiemelés */
+  --turn-white: #FEFDFE;
+
   --paper: #ffffff;
-  --ink: #1e2a2f;
-  --ink-soft: #5b6870;
-  --line: #e3e6e8;
-  --line-hour: #cdd3d6;
-  --free: #f6f8f8;
-  --booked: #1f6f5c;
-  --booked-ink: #ffffff;
-  --private: #d9dee1;
-  --private-ink: #3d4a51;
-  --now: #e4572e;
+  --ink: var(--turn-slate);
+  --ink-soft: var(--turn-lilac);
+  --line: #ECECF2;
+  --line-hour: #D6D7E3;
+  --free: #F6F6FA;
+  --booked: var(--turn-mint);
+  --booked-hover: var(--turn-green);
+  --booked-ink: var(--turn-slate);
+  --private: #E3E3EC;
+  --private-2: #EEEEF4;
+  --private-ink: var(--turn-slate);
+  --now: var(--turn-slate);
+  --today: #FFFCE3;
+  --focus: var(--turn-green);
   --row: 26px;
   --timecol: 52px;
-  --head: 'Barlow Condensed', 'Arial Narrow', sans-serif;
-  --body: 'Barlow', system-ui, sans-serif;
+  /* A turntermek.hu Avenir Next betűjéhez legközelebbi ingyenes betű */
+  --head: 'Nunito Sans', 'Avenir Next', Avenir, 'Helvetica Neue', Arial, sans-serif;
+  --body: 'Nunito Sans', 'Avenir Next', Avenir, 'Helvetica Neue', Arial, sans-serif;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
 body {
   background: var(--paper); color: var(--ink);
-  font-family: var(--body); font-size: 15px; line-height: 1.4;
+  font-family: var(--body); font-size: 15px; font-weight: 300; line-height: 1.4;
   display: flex; flex-direction: column;
 }
 button { font: inherit; color: inherit; }
-:focus-visible { outline: 2px solid var(--now); outline-offset: 2px; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 .bar {
   display: flex; align-items: center; gap: 8px;
   padding: 12px 16px; border-bottom: 1px solid var(--line);
 }
 .bar h1 {
-  font-family: var(--head); font-weight: 600; font-size: 22px; letter-spacing: .01em;
+  font-family: var(--head); font-weight: 700; font-size: 22px; letter-spacing: -.01em;
   margin: 0 auto 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .nav {
@@ -50,15 +63,15 @@ button { font: inherit; color: inherit; }
 .nav:hover { background: var(--free); }
 .today {
   height: 36px; padding: 0 14px; border-radius: 6px; border: 1px solid var(--line-hour);
-  background: var(--paper); cursor: pointer; font-weight: 500;
+  background: var(--paper); cursor: pointer; font-weight: 400;
 }
 .today:hover { background: var(--free); }
 .full {
   display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px;
-  border-radius: 6px; background: var(--booked); color: var(--booked-ink);
-  font-weight: 500; text-decoration: none; white-space: nowrap; flex: none;
+  border-radius: 6px; background: var(--turn-sun); color: var(--turn-slate); font-weight: 700;
+  font-weight: 400; text-decoration: none; white-space: nowrap; flex: none;
 }
-.full:hover { filter: brightness(1.12); }
+.full:hover { background: var(--turn-mint); }
 .full[hidden] { display: none; }
 .full svg { flex: none; }
 .datepick {
@@ -68,26 +81,27 @@ button { font: inherit; color: inherit; }
 
 .rooms { display: none; gap: 10px 20px; padding: 8px 16px 10px; border-bottom: 1px solid var(--line); flex-wrap: wrap; align-items: flex-end; }
 .rgroup { display: flex; flex-direction: column; gap: 4px; }
-.rlabel { font-size: 12px; font-weight: 500; color: var(--ink-soft); }
+.rlabel { font-size: 12px; font-weight: 400; color: var(--ink-soft); }
 .rchips { display: flex; gap: 6px; }
 .rooms button {
   flex: none; height: 34px; min-width: 44px; padding: 0 12px; border-radius: 17px;
   border: 1px solid var(--line-hour); background: var(--paper); cursor: pointer;
-  font-family: var(--head); font-weight: 600; font-size: 16px;
+  font-family: var(--head); font-weight: 700; font-size: 16px;
 }
 .rooms button[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
 
 .seg { display: inline-flex; border: 1px solid var(--line-hour); border-radius: 6px; padding: 2px; flex: none; }
 .seg button {
   height: 30px; padding: 0 12px; border: 0; border-radius: 4px; background: none; cursor: pointer;
-  font-weight: 500; color: var(--ink-soft);
+  font-weight: 400; color: var(--ink-soft);
 }
 .seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
 body.show-rooms .rooms { display: flex; }
-.colhead.today { color: var(--now); }
+.colhead.today { background: var(--turn-sun); }
+.col.today { background-color: var(--today); }
 button.colhead {
   appearance: none; display: block; width: 100%; height: 100%; margin: 0; border: 0; border-radius: 0; line-height: 1.4;
-  border-bottom: 1px solid var(--line-hour); cursor: pointer; font-family: var(--head); font-weight: 600;
+  border-bottom: 1px solid var(--line-hour); cursor: pointer; font-family: var(--head); font-weight: 700;
 }
 button.colhead:hover { background: var(--free); }
 .grid.week .colhead { font-size: 16px; }
@@ -104,7 +118,7 @@ button.colhead:hover { background: var(--free); }
 .grouphead {
   position: sticky; top: 0; z-index: 3; background: var(--paper);
   height: var(--gh); line-height: var(--gh); text-align: center;
-  font-size: 13px; font-weight: 500; color: var(--ink-soft);
+  font-size: 13px; font-weight: 400; color: var(--ink-soft);
   border-bottom: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .grouphead:not(.corner) + .grouphead { border-left: 2px solid var(--line-hour); }
@@ -112,13 +126,13 @@ button.colhead:hover { background: var(--free); }
 .colhead {
   position: sticky; top: var(--gh, 0px); z-index: 3; background: var(--paper);
   border-bottom: 1px solid var(--line-hour);
-  font-family: var(--head); font-weight: 600; font-size: 17px;
+  font-family: var(--head); font-weight: 700; font-size: 17px;
   text-align: center; padding: 8px 2px;
 }
 .corner { left: 0; z-index: 4; }
 .times { position: relative; }
 .times div {
-  height: var(--row); font-family: var(--head); font-weight: 500; font-size: 13px;
+  height: var(--row); font-family: var(--head); font-weight: 300; font-size: 13px;
   color: var(--ink-soft); text-align: right; padding-right: 8px; transform: translateY(-8px);
 }
 .times div.half { visibility: hidden; }
@@ -134,13 +148,13 @@ button.colhead:hover { background: var(--free); }
   text-decoration: none; display: block;
 }
 .b .lbl { position: sticky; top: calc(var(--gh, 0px) + var(--hh, 38px) + 3px); }
-.b strong { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.b span { font-family: var(--head); font-weight: 500; opacity: .85; }
+.b strong { display: block; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.b span { font-family: var(--head); font-weight: 300; opacity: .85; }
 .b.pub { background: var(--booked); color: var(--booked-ink); }
-a.b.pub:hover { filter: brightness(1.12); }
+a.b.pub:hover { background: var(--booked-hover); }
 .b.priv {
   color: var(--private-ink);
-  background: repeating-linear-gradient(135deg, var(--private) 0 6px, #e6eaec 6px 12px);
+  background: repeating-linear-gradient(135deg, var(--private) 0 6px, var(--private-2) 6px 12px);
 }
 .b.short strong { display: inline; }
 .b.short span { display: none; }
@@ -148,8 +162,8 @@ a.b.pub:hover { filter: brightness(1.12); }
 
 .nowline { position: absolute; left: 0; right: 0; height: 2px; background: var(--now); z-index: 2; pointer-events: none; }
 .nowline.first::before {
-  content: ''; position: absolute; left: -5px; top: -4px; width: 10px; height: 10px;
-  border-radius: 50%; background: var(--now);
+  content: ''; position: absolute; left: -6px; top: -5px; width: 12px; height: 12px;
+  border-radius: 50%; background: var(--turn-sun); box-shadow: 0 0 0 2px var(--turn-slate);
 }
 
 .legend {
@@ -159,7 +173,7 @@ a.b.pub:hover { filter: brightness(1.12); }
 .legend i { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: -2px; margin-right: 6px; }
 .legend .l-free { background: var(--free); border: 1px solid var(--line-hour); }
 .legend .l-pub { background: var(--booked); }
-.legend .l-priv { background: repeating-linear-gradient(135deg, var(--private) 0 4px, #e6eaec 4px 8px); }
+.legend .l-priv { background: repeating-linear-gradient(135deg, var(--private) 0 4px, var(--private-2) 4px 8px); }
 .legend .l-now { background: var(--now); height: 3px; width: 14px; vertical-align: 3px; border-radius: 0; }
 
 @media (max-width: 640px) {
@@ -385,7 +399,7 @@ function build(cols, groups) {
   let firstNow = true;
   cols.forEach(c => {
     const col = document.createElement('div');
-    col.className = 'col' + (c.locStart ? ' loc-start' : '');
+    col.className = 'col' + (c.locStart ? ' loc-start' : '') + (c.today && view === 'week' ? ' today' : '');
     col.style.height = (slots * row) + 'px';
     col.setAttribute('role', 'list');
     col.setAttribute('aria-label', (c.title || c.label) + ' foglalásai');
