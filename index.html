@@ -53,6 +53,14 @@ button { font: inherit; color: inherit; }
   background: var(--paper); cursor: pointer; font-weight: 500;
 }
 .today:hover { background: var(--free); }
+.full {
+  display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px;
+  border-radius: 6px; background: var(--booked); color: var(--booked-ink);
+  font-weight: 500; text-decoration: none; white-space: nowrap; flex: none;
+}
+.full:hover { filter: brightness(1.12); }
+.full[hidden] { display: none; }
+.full svg { flex: none; }
 .datepick {
   height: 36px; border: 1px solid var(--line-hour); border-radius: 6px; padding: 0 8px;
   font: inherit; color: var(--ink); background: var(--paper);
@@ -163,6 +171,8 @@ a.b.pub:hover { filter: brightness(1.12); }
   .grid.week .times div { font-size: 12px; padding-right: 4px; }
   .bar h1 { font-size: 19px; }
   .datepick { display: none; }
+  .full { padding: 0; width: 36px; justify-content: center; }
+  .full-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   .b { font-size: 14px; }
 }
 @media (prefers-reduced-motion: no-preference) {
@@ -181,6 +191,10 @@ a.b.pub:hover { filter: brightness(1.12); }
   </div>
   <input type="date" class="datepick" id="pick" aria-label="Dátum választása">
   <button class="today" id="today">Ma</button>
+  <a class="full" id="full" href="./" target="_blank" rel="noopener" hidden>
+    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M9 2h5v5M14 2 7.5 8.5M12 9.5V13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span class="full-label">Teljes oldal</span>
+  </a>
 </header>
 <nav class="rooms" id="rooms" aria-label="Terem választása"></nav>
 <div class="status" id="status" role="status"></div>
@@ -232,8 +246,9 @@ const iso = day => `${day.y}-${String(day.m + 1).padStart(2, '0')}-${String(day.
 const todayBp = () => { const p = bpParts(new Date()); return { y: p.y, m: p.m, d: p.d }; };
 
 let rooms = [];
-let day = todayBp();
-let view = 'day';
+const URLP = new URLSearchParams(location.search);
+let day = (() => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(URLP.get('nap') || ''); return m ? { y: +m[1], m: +m[2] - 1, d: +m[3] } : todayBp(); })();
+let view = URLP.get('nezet') === 'het' ? 'week' : 'day';
 let selectedRoom = null;
 let firstRender = true;
 const mobile = window.matchMedia('(max-width: 640px)');
@@ -475,6 +490,13 @@ async function refresh() {
     $('title').textContent = weekTitle(ws);
   }
   $('pick').value = iso(day);
+  if (IN_FRAME) {
+    const q = new URLSearchParams({ nap: iso(day), nezet: view === 'week' ? 'het' : 'nap' });
+    if (selectedRoom) q.set('terem', selectedRoom);
+    if (DEMO) q.set('demo', '1');
+    $('full').href = location.pathname + '?' + q.toString();
+    $('full').hidden = false;
+  }
   try {
     const bookings = await loadBookings(start, end);
     if (my !== reqId) return;
@@ -513,7 +535,9 @@ setInterval(() => { if (!document.hidden) refresh(); }, 60000);
 (async () => {
   try {
     await loadRooms();
-    selectedRoom = rooms[0] && rooms[0].id;
+    const wanted = +URLP.get('terem');
+    selectedRoom = rooms.some(r => r.id === wanted) ? wanted : (rooms[0] && rooms[0].id);
+    if (view === 'week') { $('vDay').setAttribute('aria-pressed', 'false'); $('vWeek').setAttribute('aria-pressed', 'true'); $('prev').setAttribute('aria-label', 'Előző hét'); $('next').setAttribute('aria-label', 'Következő hét'); }
     renderRoomChips();
     refresh();
   } catch (err) {
